@@ -19,7 +19,7 @@ from typing import Optional
 
 # Bump this when a change to a scorer or rubric would change a reported number.
 # Report scores as "measured with Assevra v0.1".
-ASSEVRA_VERSION = "0.1"
+ASSEVRA_VERSION = "0.2"
 
 # Citation provenance. Stamped into every report so attribution travels with the
 # artifact: anyone who shares a scorecard carries the DOI with it. Concept DOI

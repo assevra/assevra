@@ -254,8 +254,8 @@ browser).
   production agent — real audits use larger, adversarial datasets.
 - **Judge calibration is described, not automated.** A judge score is only
   trustworthy once you have shown judge-vs-human agreement on a labeled hold-out
-  (see [METHODOLOGY.md §4](METHODOLOGY.md)). v0.1 documents that step; it does
-  not perform it.
+  (see [METHODOLOGY.md §4](METHODOLOGY.md)). The current version documents that
+  step; it does not perform it.
 - **The scorers have real limits.** Task-completion checks fact presence, not
   phrasing. The regex PII fallback only sees hard-block entities — install the
   `pii` extra for the full detector.
@@ -265,7 +265,7 @@ what they honestly exclude.
 
 ## How to cite
 
-> Divi, Veera Ravindra. *Assevra: A Reliability Scorecard for LLM Agents*, v0.1,
+> Divi, Veera Ravindra. *Assevra: A Reliability Scorecard for LLM Agents*, v0.2,
 > 2026. https://doi.org/10.5281/zenodo.21200852
 
 The project is archived on Zenodo with a citable DOI:
@@ -273,7 +273,7 @@ The project is archived on Zenodo with a citable DOI:
 concept DOI — always resolves to the latest version). A
 [`CITATION.cff`](CITATION.cff) is included; GitHub renders a "Cite this
 repository" button from it. When you report a number, say it was *measured with
-Assevra v0.1*.
+Assevra v0.2*.
 
 ## License & contributing
 
