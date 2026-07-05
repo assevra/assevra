@@ -371,7 +371,7 @@ what they honestly exclude.
 
 ## How to cite
 
-> Divi, Veera Ravindra. *Assevra: A Reliability Scorecard for LLM Agents*, v0.2,
+> Divi, Veera Ravindra. *Assevra: A Reliability Scorecard for LLM Agents*, v0.3,
 > 2026. https://doi.org/10.5281/zenodo.21200852
 
 The project is archived on Zenodo with a citable DOI:
@@ -379,7 +379,7 @@ The project is archived on Zenodo with a citable DOI:
 concept DOI — always resolves to the latest version). A
 [`CITATION.cff`](CITATION.cff) is included; GitHub renders a "Cite this
 repository" button from it. When you report a number, say it was *measured with
-Assevra v0.2*.
+Assevra v0.3*.
 
 ## License & contributing
 

@@ -11,7 +11,7 @@ type: software
 authors:
   - family-names: Divi
     given-names: Veera Ravindra
-version: "0.2.0"
+version: "0.3.0"
 date-released: "2026-07-05"
 license: MIT
 doi: 10.5281/zenodo.21200852

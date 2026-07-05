@@ -1,6 +1,6 @@
 # The Assevra Reliability Scorecard
 
-**Version 0.1** · A methodology for measuring the reliability of LLM agents.
+**Version 0.3** · A methodology for measuring the reliability of LLM agents.
 Maintained by Veera Ravindra Divi. MIT licensed.
 
 This document is the specification. The Python package in this repository is one
@@ -98,23 +98,51 @@ follow-up date). A row passes only if every required item appears in the output.
 dependency-free. This is a floor: it proves the required facts are present, not
 that the wording is good (see §6). Threshold ≥ 0.90.
 
+### 3.5 Reliability across repeated trials (pass^k and consistency)
+
+The four dimensions above answer "how often does the agent behave?" A deployed
+agent needs the stricter question: "does it behave *every* time?" When a dataset
+groups repeated trials of the same input under a shared `case_id`, the scorecard
+reports two cross-dimension metrics over those groups:
+
+- **Consistency** — the share of repeated cases whose trials all agree (all pass
+  or all fail). A case that sometimes passes and sometimes fails is *flaky*, and
+  flaky cases are listed by id.
+- **pass^k** — the estimated probability that *k independent attempts all pass*,
+  computed with the standard unbiased combinatorial estimator: from a case with
+  `n` trials of which `c` passed, `pass^k = C(c, k) / C(n, k)` (undefined, and
+  skipped, when `n < k`). It is the reliability analogue of pass@k: it rewards
+  succeeding every time, not merely once.
+
+These are additive. A single-trial dataset has nothing to group, so the section
+is omitted and the base scorecard is unchanged.
+
 ## 4. Calibrating the judge (required before trusting a judge score)
 
 The single highest-leverage step in a judge-based evaluation is proving the
 judge agrees with humans. Before reporting a grounding or safety number, score a
 labeled hold-out with both the judge and a human annotator and compute
-agreement (e.g. Cohen's κ or raw agreement; aim ≥ 0.85). If the judge can be
-gamed or disagrees with humans, the score is theater.
+agreement. The bar is **Cohen's κ ≥ 0.85** (chance-corrected — two raters can
+agree 90% of the time yet have κ near zero when the classes are lopsided). If the
+judge can be gamed or disagrees with humans, the score is theater.
 
-This step is described here but is **deliberately not automated** in the v0.1
-reference implementation — it depends on your hold-out and your annotation
-process. Wiring it in is the natural next contribution.
+The reference implementation **automates this**: `assevra calibrate --dataset
+holdout.jsonl` runs the judge (or panel) over rows carrying a human `human_label`
+and reports accuracy, Cohen's κ, and sensitivity/specificity per dimension and
+overall, exiting non-zero below the κ ≥ 0.85 bar. It does not gather the human
+labels for you — that judgment is yours.
+
+**Judge panels.** A single judge can be biased or flaky. Scoring with a *panel*
+of models (a 1–5 score aggregated by median, a boolean verdict by majority) and
+treating panelist **disagreement** as a signal — a split vote flags a genuinely
+ambiguous row — raises agreement with humans and exposes ambiguity a single judge
+would hide.
 
 ## 5. How to report a score
 
 Report a scorecard, not a single number. State:
 
-- the Assevra version (e.g. "measured with Assevra v0.1"),
+- the Assevra version (e.g. "measured with Assevra v0.3"),
 - the dataset and its size,
 - the judge model and rubric hash for judge dimensions,
 - each dimension's pass rate, threshold, and 95% interval, and
@@ -123,10 +151,13 @@ Report a scorecard, not a single number. State:
 A one-line form is acceptable in prose:
 
 > Grounding 0.87 (95% CI 0.79–0.93, n=100, threshold 0.90, FAIL) — measured with
-> Assevra v0.1, judge claude-opus-4-8.
+> Assevra v0.3, judge claude-opus-4-8.
 
 See [examples/sample-scorecard.md](examples/sample-scorecard.md) for a full
-worked example.
+worked example. A scorecard can be cryptographically signed (`assevra sign`) so a
+reviewer can verify it was produced by a specific signer and not altered, and
+mapped to AI-governance control families as an Agent Card (`assevra attest`) —
+evidence toward a review, never a certification or compliance determination.
 
 ## 6. Scope and limitations
 

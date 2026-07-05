@@ -4,7 +4,7 @@ All notable changes to Assevra are recorded here. The project follows
 semantic-ish versioning; the reported "measured with Assevra vX.Y" number is
 bumped whenever a scorer or rubric change could change a reported score.
 
-## [Unreleased]
+## [0.3.0] — 2026-07-05
 
 ### Added
 - **Agent Card (`assevra attest`).** Maps a scorecard's measured evidence to the
