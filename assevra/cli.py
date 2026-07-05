@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 from .judge import DEFAULT_JUDGE_MODEL, get_judge
-from .scorecard import Scorecard
+from .scorecard import ASSEVRA_DOI, Scorecard
 from .scorers import grounding, pii, safety, task_completion
 
 # Maps a dataset row's `dimension` to the scorer module that handles it.
@@ -116,6 +116,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(f"[assevra] wrote {md_path}")
     print(f"[assevra] wrote {json_path}")
     print(f"[assevra] wrote {html_path}")
+    print(f"[assevra] cite: https://doi.org/{ASSEVRA_DOI}  (see CITATION.cff)")
 
     if not args.gate:
         return 0
