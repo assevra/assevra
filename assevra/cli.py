@@ -16,6 +16,7 @@ gate CI directly.
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import os
 import sys
@@ -119,9 +120,118 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(f"[assevra] wrote {html_path}")
     print(f"[assevra] cite: https://doi.org/{ASSEVRA_DOI}  (see CITATION.cff)")
 
+    if args.sign:
+        from . import signing
+
+        if not Path(args.sign).is_file():
+            raise SystemExit(f"[assevra] signing key not found: {args.sign}")
+        signed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        try:
+            block = signing.sign_scorecard(
+                scorecard.to_dict(),
+                Path(args.sign).read_text(encoding="utf-8"),
+                signed_at=signed_at,
+            )
+        except signing.SigningError as exc:
+            raise SystemExit(f"[assevra] {exc}")
+        sig_path = out_dir / "scorecard.sig.json"
+        sig_path.write_text(json.dumps(block, indent=2) + "\n", encoding="utf-8")
+        print(f"[assevra] wrote {sig_path}  (detached signature)")
+        print(
+            f"[assevra] verify: python -m assevra verify "
+            f"--scorecard {json_path} --signature {sig_path}"
+        )
+
     if not args.gate:
         return 0
     return 0 if scorecard.overall_pass else 1
+
+
+def cmd_keygen(args: argparse.Namespace) -> int:
+    from . import signing
+
+    try:
+        priv_pem, pub_b64 = signing.generate_keypair()
+    except signing.SigningError as exc:
+        raise SystemExit(f"[assevra] {exc}")
+
+    Path(args.out_private).write_text(priv_pem, encoding="utf-8")
+    try:
+        os.chmod(args.out_private, 0o600)
+    except OSError:
+        pass
+    Path(args.out_public).write_text(pub_b64 + "\n", encoding="utf-8")
+
+    print(f"[assevra] wrote private key -> {args.out_private}  (KEEP SECRET — never commit)")
+    print(f"[assevra] wrote public key  -> {args.out_public}")
+    print(f"[assevra] public key: {pub_b64}")
+    print("[assevra] publish the PUBLIC key so anyone can verify your scorecards.")
+    return 0
+
+
+def cmd_sign(args: argparse.Namespace) -> int:
+    from . import signing
+
+    if not Path(args.scorecard).is_file():
+        raise SystemExit(f"[assevra] scorecard not found: {args.scorecard}")
+    if not Path(args.key).is_file():
+        raise SystemExit(f"[assevra] signing key not found: {args.key}")
+
+    try:
+        scorecard = json.loads(Path(args.scorecard).read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"[assevra] {args.scorecard}: invalid JSON: {exc}")
+
+    signed_at = args.timestamp or datetime.datetime.now(datetime.timezone.utc).isoformat()
+    try:
+        block = signing.sign_scorecard(
+            scorecard, Path(args.key).read_text(encoding="utf-8"), signed_at=signed_at
+        )
+    except signing.SigningError as exc:
+        raise SystemExit(f"[assevra] {exc}")
+
+    out = args.out or str(Path(args.scorecard).with_suffix(".sig.json"))
+    Path(out).write_text(json.dumps(block, indent=2) + "\n", encoding="utf-8")
+    print(f"[assevra] signed {args.scorecard} -> {out}")
+    print(f"[assevra] content sha256: {block['content_sha256']}")
+    print(
+        f"[assevra] verify: python -m assevra verify "
+        f"--scorecard {args.scorecard} --signature {out}"
+    )
+    return 0
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    from . import signing
+
+    if not Path(args.scorecard).is_file():
+        raise SystemExit(f"[assevra] scorecard not found: {args.scorecard}")
+    if not Path(args.signature).is_file():
+        raise SystemExit(f"[assevra] signature not found: {args.signature}")
+
+    try:
+        scorecard = json.loads(Path(args.scorecard).read_text(encoding="utf-8"))
+        sig_block = json.loads(Path(args.signature).read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"[assevra] invalid JSON: {exc}")
+
+    expected = None
+    if args.public_key:
+        pk = Path(args.public_key)
+        expected = pk.read_text(encoding="utf-8").strip() if pk.is_file() else args.public_key.strip()
+
+    try:
+        result = signing.verify_scorecard(scorecard, sig_block, expected_public_key_b64=expected)
+    except signing.SigningError as exc:
+        raise SystemExit(f"[assevra] {exc}")
+
+    print(f"[assevra] verification: {'OK' if result.ok else 'FAILED'}")
+    print(f"[assevra] {result.reason}")
+    if result.signed_at:
+        print(f"[assevra] signed_at: {result.signed_at}")
+    if result.public_key:
+        print(f"[assevra] public key: {result.public_key}")
+    return 0 if result.ok else 1
 
 
 def cmd_bootstrap(args: argparse.Namespace) -> int:
@@ -192,6 +302,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="exit non-zero if the scorecard fails (for CI gating)",
     )
+    run.add_argument(
+        "--sign",
+        metavar="KEYFILE",
+        default=None,
+        help="Ed25519 private key (PEM) to sign the scorecard; writes scorecard.sig.json",
+    )
     run.set_defaults(func=cmd_run)
 
     boot = sub.add_parser(
@@ -240,6 +356,49 @@ def build_parser() -> argparse.ArgumentParser:
         "--context-field", default=None, help="generic format: field holding the context"
     )
     boot.set_defaults(func=cmd_bootstrap)
+
+    keygen = sub.add_parser(
+        "keygen", help="generate an Ed25519 keypair for signing scorecards"
+    )
+    keygen.add_argument(
+        "--out-private",
+        default="assevra_ed25519_private.pem",
+        help="path for the private key (default: assevra_ed25519_private.pem)",
+    )
+    keygen.add_argument(
+        "--out-public",
+        default="assevra_ed25519_public.txt",
+        help="path for the public key (default: assevra_ed25519_public.txt)",
+    )
+    keygen.set_defaults(func=cmd_keygen)
+
+    sign = sub.add_parser(
+        "sign", help="sign a scorecard.json, producing a detached signature"
+    )
+    sign.add_argument("--scorecard", required=True, help="path to scorecard.json")
+    sign.add_argument("--key", required=True, help="Ed25519 private key (PEM)")
+    sign.add_argument(
+        "--out", default=None, help="signature output path (default: <scorecard>.sig.json)"
+    )
+    sign.add_argument(
+        "--timestamp",
+        default=None,
+        help="ISO-8601 signing timestamp (default: current UTC time)",
+    )
+    sign.set_defaults(func=cmd_sign)
+
+    verify = sub.add_parser(
+        "verify", help="verify a scorecard against its detached signature"
+    )
+    verify.add_argument("--scorecard", required=True, help="path to scorecard.json")
+    verify.add_argument("--signature", required=True, help="path to the .sig.json")
+    verify.add_argument(
+        "--public-key",
+        default=None,
+        help="pin the expected public key (a file path or the base64 string) to prove authorship",
+    )
+    verify.set_defaults(func=cmd_verify)
+
     return parser
 
 

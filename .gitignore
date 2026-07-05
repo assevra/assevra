@@ -16,6 +16,11 @@ scorecard.html
 scorecard-preview.png
 !examples/sample-scorecard.md
 
+# Signing keys — never commit a private key
+*.pem
+assevra_ed25519_private*
+assevra_ed25519_public*
+
 # Editors / OS
 .vscode/
 .idea/

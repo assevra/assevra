@@ -28,8 +28,9 @@ Assevra makes three deliberately different choices:
   self-contained artifact (Markdown, JSON, and a styled HTML report with inline
   CSS) that outlives any login: versionable in git, attachable to a PR, mailable
   to an auditor, reproducible by anyone. The artifact *is* the shareable surface.
-  *(Roadmap: cryptographic signing, to make the scorecard tamper-evident —
-  verifiable evidence, not just a report.)*
+  You can **cryptographically sign** it (`assevra sign`) so a reviewer can verify
+  it was produced by you and has not been altered — verifiable evidence, not just
+  a report.
 - **Every number carries honest error bars.** A bare "0.92" hides how few samples
   it came from. Assevra reports a 95% **Wilson confidence interval** on every
   dimension, so nobody over-reads a small-sample move — the discipline the field
@@ -77,6 +78,9 @@ python -m spacy download en_core_web_lg
 # LLM-as-judge dimensions (grounding, safety):
 pip install "assevra[judge]"
 export ANTHROPIC_API_KEY=sk-...
+
+# Cryptographic signing of scorecards (Ed25519):
+pip install "assevra[sign]"
 
 # Everything at once:
 pip install "assevra[all]"
@@ -171,6 +175,38 @@ Save that as `my_agent.jsonl` and run `python -m assevra run --dataset my_agent.
 See [`datasets/golden.jsonl`](datasets/golden.jsonl) for more worked rows and
 [METHODOLOGY.md](METHODOLOGY.md) for the full per-dimension specification.
 
+## Sign a scorecard — tamper-evident evidence
+
+A shared HTML file is convenient, but it is not *evidence*: anyone can edit it.
+Assevra can attach a detached **Ed25519 signature** so a reviewer can confirm a
+scorecard was produced by you and has not been altered since.
+
+```bash
+pip install "assevra[sign]"
+
+# One-time: generate a keypair. Keep the private key secret; publish the public one.
+python -m assevra keygen
+
+# Sign while scoring — writes scorecard.sig.json next to the report:
+python -m assevra run --dataset your_agent.jsonl --sign assevra_ed25519_private.pem
+
+# ...or sign an existing scorecard.json:
+python -m assevra sign --scorecard scorecard.json --key assevra_ed25519_private.pem
+```
+
+Anyone can then verify it. Pin your published public key to prove *authorship*,
+not just integrity:
+
+```bash
+python -m assevra verify --scorecard scorecard.json --signature scorecard.sig.json \
+    --public-key assevra_ed25519_public.txt
+```
+
+Verification fails if a single byte of the scorecard changed, or if it was signed
+by any key other than the one pinned — so a forger cannot substitute their own
+signature. The signature is **detached**: the scorecard files themselves are
+never modified, and the signature travels as a small `scorecard.sig.json`.
+
 ## Troubleshooting
 
 - **`grounding` shows `SKIPPED`** — the LLM judge isn't configured. Run
@@ -182,6 +218,11 @@ See [`datasets/golden.jsonl`](datasets/golden.jsonl) for more worked rows and
   `grounding`, `safety`, `pii`, `task_completion`.
 - **A dimension you expected is missing from the report** — it only appears if
   the dataset contains at least one row for it.
+- **`signing requires the 'cryptography' package`** — install the signing extra:
+  `pip install "assevra[sign]"`.
+- **`verify` reports a content-hash mismatch** — the `scorecard.json` differs from
+  what was signed (even a whitespace-only re-save is fine; only the *content*
+  matters). Re-sign, or verify the exact file that was signed.
 
 ## An example scorecard
 
