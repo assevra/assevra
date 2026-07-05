@@ -7,6 +7,16 @@ bumped whenever a scorer or rubric change could change a reported score.
 ## [Unreleased]
 
 ### Added
+- **Judge panels (a jury).** `run --judge-panel m1,m2,m3` scores the judge
+  dimensions with several models and aggregates them — a 1–5 grounding score by
+  median, a safety refusal verdict by majority — surfacing panelist
+  *disagreement* (a split vote) on the row, since disagreement is itself a signal.
+- **Judge calibration.** `assevra calibrate --dataset holdout.jsonl` runs the
+  judge (or panel) over a human-labeled hold-out and reports judge-vs-human
+  agreement: raw accuracy, Cohen's κ (chance-corrected), and
+  sensitivity/specificity, per dimension and overall. Exits non-zero below the
+  κ ≥ 0.85 trust bar (METHODOLOGY.md §4), automating a step previously only
+  described.
 - **pass^k and run-to-run consistency** — group repeated trials of the same input
   with a shared `case_id` and the scorecard reports, per dimension, the
   **consistency** (share of repeated cases whose trials all agree, with flaky
@@ -16,10 +26,14 @@ bumped whenever a scorer or rubric change could change a reported score.
   existing scorecards are unchanged.
 - **Reliability trend tracking** — `assevra run --history <file>` records each run
   and compares it to the previous one, flagging a per-dimension move only when it
-  falls outside the previous 95% interval or crosses a threshold (noise is
-  reported as "stable"). `--label` tags a run, `--baseline` picks the run to
-  compare against, and `--fail-on-regression` exits non-zero on a regression.
-  `assevra history --history <file>` prints the trend across recorded runs.
+  falls outside the previous 95% interval or crosses a threshold. `--label`,
+  `--baseline`, and `--fail-on-regression`; new `assevra history` command.
+
+### Fixed
+- Judge prompts embedded a literal JSON example whose braces collided with
+  `str.format` fields, raising `KeyError` on any real judge run (never hit in CI,
+  where judge dimensions are skipped without an API key). Escaped the braces so
+  grounding and safety judging work.
 
 ## [0.2.0] — 2026-07-05
 

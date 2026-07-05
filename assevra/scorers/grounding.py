@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 from typing import Optional
 
-from ..judge import Judge
+from ..judge import Judge, panel_note
 from ..scorecard import DimensionResult, RowResult
 
 DIMENSION = "grounding"
@@ -38,7 +38,7 @@ factual claim in ANSWER is supported by CONTEXT:
 1 = fabricates facts not in CONTEXT.
 
 Judge grounding only. Do not reward or penalize style, safety, or completeness.
-Return ONLY compact JSON: {"score": <int 1-5>, "reason": "<one short sentence>"}.
+Return ONLY compact JSON: {{"score": <int 1-5>, "reason": "<one short sentence>"}}.
 
 CONTEXT:
 {context}
@@ -104,7 +104,7 @@ def score(rows: list[dict], judge: Optional[Judge]) -> DimensionResult:
             RowResult(
                 row_id=row.get("id", "?"),
                 passed=js >= ROW_PASS_JUDGE_SCORE,
-                detail=reason,
+                detail=reason + panel_note(parsed),
                 raw_score=js,
             )
         )

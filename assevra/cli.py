@@ -21,9 +21,10 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 from . import bootstrap as bootstrap_mod
-from .judge import DEFAULT_JUDGE_MODEL, get_judge
+from .judge import DEFAULT_JUDGE_MODEL, get_judge, get_panel
 from .scorecard import ASSEVRA_DOI, Scorecard
 from .scorers import grounding, pii, safety, task_completion
 
@@ -74,7 +75,12 @@ def group_by_dimension(rows: list[dict]) -> dict[str, list[dict]]:
     return grouped
 
 
-def build_scorecard(dataset_path: str, judge_model: str, pass_k: int = 2) -> Scorecard:
+def build_scorecard(
+    dataset_path: str,
+    judge_model: str,
+    pass_k: int = 2,
+    judge_panel: Optional[list] = None,
+) -> Scorecard:
     from . import reliability as reliability_mod
 
     rows = load_dataset(dataset_path)
@@ -84,8 +90,9 @@ def build_scorecard(dataset_path: str, judge_model: str, pass_k: int = 2) -> Sco
     # of one logical case; an ungrouped row is its own single-trial case).
     id_to_case = {row.get("id", "?"): row.get("case_id", row.get("id", "?")) for row in rows}
 
-    # Build the judge once and share it across the judge dimensions.
-    judge = get_judge(judge_model)
+    # Build the judge once and share it across the judge dimensions. A panel of
+    # models (if given) is used as a jury; otherwise a single judge.
+    judge = get_panel(judge_panel) if judge_panel else get_judge(judge_model)
 
     dimensions = []
     for dim in DIMENSION_ORDER:
@@ -113,11 +120,19 @@ def build_scorecard(dataset_path: str, judge_model: str, pass_k: int = 2) -> Sco
     )
 
 
+def _parse_panel(spec: Optional[str]) -> Optional[list]:
+    if not spec:
+        return None
+    models = [m.strip() for m in spec.split(",") if m.strip()]
+    return models or None
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     if not Path(args.dataset).is_file():
         raise SystemExit(f"dataset not found: {args.dataset}")
 
-    scorecard = build_scorecard(args.dataset, args.judge_model, args.pass_k)
+    panel = _parse_panel(args.judge_panel)
+    scorecard = build_scorecard(args.dataset, args.judge_model, args.pass_k, judge_panel=panel)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -317,6 +332,60 @@ def cmd_history(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_calibrate(args: argparse.Namespace) -> int:
+    from . import calibration as calib
+
+    if not Path(args.dataset).is_file():
+        raise SystemExit(f"dataset not found: {args.dataset}")
+    rows = load_dataset(args.dataset)
+
+    id_to_human = {}
+    for r in rows:
+        if args.label_field in r:
+            b = calib.to_bool(r[args.label_field])
+            if b is not None:
+                id_to_human[r.get("id", "?")] = b
+    if not id_to_human:
+        raise SystemExit(
+            f"[assevra] no usable '{args.label_field}' labels found in {args.dataset}."
+        )
+
+    panel = _parse_panel(args.judge_panel)
+    judge = get_panel(panel) if panel else get_judge(args.judge_model)
+    if judge is None:
+        raise SystemExit(
+            "[assevra] calibration needs a judge (set ANTHROPIC_API_KEY and "
+            'install the judge extra: pip install "assevra[judge]").'
+        )
+
+    grouped = group_by_dimension(rows)
+    per_dim_labels = {}
+    for dim in DIMENSION_ORDER:
+        if dim in JUDGE_DIMENSIONS and dim in grouped:
+            result = SCORERS[dim](grouped[dim], judge)
+            jl, hl = [], []
+            for rr in result.rows:
+                if rr.row_id in id_to_human:
+                    jl.append(bool(rr.passed))
+                    hl.append(id_to_human[rr.row_id])
+            if jl:
+                per_dim_labels[dim] = (jl, hl)
+
+    if not per_dim_labels:
+        raise SystemExit(
+            "[assevra] no judge-dimension rows with human labels to calibrate "
+            "(need grounding/safety rows carrying the label field)."
+        )
+
+    all_j = [x for (jl, _) in per_dim_labels.values() for x in jl]
+    all_h = [x for (_, hl) in per_dim_labels.values() for x in hl]
+    overall = calib.compute(all_j, all_h)
+    per_dim = {d: calib.compute(jl, hl) for d, (jl, hl) in per_dim_labels.items()}
+    print(calib.render(overall, per_dim))
+    print(f"\n[assevra] judge: {judge.model}")
+    return 0 if overall.trustworthy else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="assevra",
@@ -344,6 +413,12 @@ def build_parser() -> argparse.ArgumentParser:
             "judge model for the LLM-as-judge dimensions "
             f"(default: {DEFAULT_JUDGE_MODEL}; use claude-sonnet-5 for volume)"
         ),
+    )
+    run.add_argument(
+        "--judge-panel",
+        default=None,
+        metavar="M1,M2,...",
+        help="comma-separated judge models to use as a jury (overrides --judge-model)",
     )
     run.add_argument(
         "--pass-k",
@@ -482,6 +557,29 @@ def build_parser() -> argparse.ArgumentParser:
         "--limit", type=int, default=None, help="show only the last N runs"
     )
     hist.set_defaults(func=cmd_history)
+
+    cal = sub.add_parser(
+        "calibrate",
+        help="measure judge-vs-human agreement (Cohen's κ) on a labeled hold-out",
+    )
+    cal.add_argument(
+        "--dataset", required=True, help="hold-out JSONL with a human label per row"
+    )
+    cal.add_argument(
+        "--label-field",
+        default="human_label",
+        help="row field holding the human pass/fail label (default: human_label)",
+    )
+    cal.add_argument(
+        "--judge-model", default=DEFAULT_JUDGE_MODEL, help="single judge model"
+    )
+    cal.add_argument(
+        "--judge-panel",
+        default=None,
+        metavar="M1,M2,...",
+        help="comma-separated judge models to use as a jury",
+    )
+    cal.set_defaults(func=cmd_calibrate)
 
     return parser
 

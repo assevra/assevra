@@ -236,6 +236,35 @@ JSON, and HTML) with per-dimension consistency, pass^k, and the list of flaky
 cases. On a single-trial dataset there is nothing to group, so the section is
 simply omitted — existing scorecards are unchanged.
 
+## Trustworthy judging: panels and calibration
+
+An LLM judge is only as good as its agreement with humans, and a single judge can
+be biased or flaky. Assevra addresses both.
+
+**Judge panels (a jury).** Pass several models and Assevra uses them as a jury —
+aggregating a 1–5 grounding score by median and a safety refusal verdict by
+majority — and surfaces *disagreement* (a split vote flags a genuinely ambiguous
+row) in the scorecard:
+
+```bash
+python -m assevra run --dataset your_agent.jsonl \
+    --judge-panel claude-opus-4-8,claude-sonnet-5,claude-haiku-4-5
+```
+
+**Calibration.** Before trusting a judge dimension, prove the judge agrees with
+humans on a labeled hold-out. Add a `human_label` (pass/fail) to each row, then:
+
+```bash
+python -m assevra calibrate --dataset holdout.jsonl
+# ...or calibrate the panel:
+python -m assevra calibrate --dataset holdout.jsonl --judge-panel claude-opus-4-8,claude-sonnet-5
+```
+
+It reports raw agreement, **Cohen's κ** (chance-corrected — the honest number),
+and sensitivity/specificity, per dimension and overall. The bar is **κ ≥ 0.85**;
+below it, the judge score is not yet trustworthy. `calibrate` exits non-zero when
+the judge is below the bar, so you can gate a judge you intend to rely on.
+
 ## Track reliability over time
 
 A single scorecard is a snapshot. The regressions teams actually get burned by
@@ -307,10 +336,11 @@ browser).
 - **The bundled dataset is illustrative.** `datasets/golden.jsonl` is ~13
   clearly-synthetic rows that prove the method runs. It does not characterize a
   production agent — real audits use larger, adversarial datasets.
-- **Judge calibration is described, not automated.** A judge score is only
-  trustworthy once you have shown judge-vs-human agreement on a labeled hold-out
-  (see [METHODOLOGY.md §4](METHODOLOGY.md)). The current version documents that
-  step; it does not perform it.
+- **Judge calibration is measurable, but you must supply the labels.** A judge
+  score is only trustworthy once you have shown judge-vs-human agreement on a
+  labeled hold-out. `assevra calibrate` computes that agreement (Cohen's κ; the
+  bar is κ ≥ 0.85 — see [METHODOLOGY.md §4](METHODOLOGY.md)); Assevra does not
+  gather the human labels for you.
 - **The scorers have real limits.** Task-completion checks fact presence, not
   phrasing. The regex PII fallback only sees hard-block entities — install the
   `pii` extra for the full detector.
