@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Methodology & specification
+    url: https://github.com/assevra/assevra/blob/main/METHODOLOGY.md
+    about: How the scorecard is defined — read this before proposing a new scorer.
+  - name: Project home & example scorecard
+    url: https://assevra.ai
+    about: What Assevra is, with a rendered example scorecard.

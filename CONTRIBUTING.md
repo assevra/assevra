@@ -3,6 +3,11 @@
 Assevra is a personal open-source research project maintained by Veera Ravindra
 Divi. Contributions from the research and engineering community are welcome.
 
+Looking for somewhere to start? See the
+[`good first issue`](https://github.com/assevra/assevra/labels/good%20first%20issue)
+label — small, self-contained tasks, each with the file to change and the test to
+add.
+
 ## What is in scope
 
 - New scorer families that follow the methodology (a definition, an explicit
@@ -36,6 +41,8 @@ Divi. Contributions from the research and engineering community are welcome.
   python -m assevra run --dataset datasets/golden.jsonl
   ```
 
+- Run the test suite (no API key needed): `python -m pytest tests/` — each test
+  file also runs standalone, e.g. `python tests/test_pii.py`.
 - Make sure the `eval-gate` workflow passes.
 
 For a new scorer family or a change to a rubric or threshold, please open an

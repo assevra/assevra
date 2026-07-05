@@ -369,6 +369,24 @@ browser).
 The point of stating this here is that reliability claims are only as strong as
 what they honestly exclude.
 
+## Who's using Assevra?
+
+Assevra is new. If you're using it to evaluate, gate, or audit an agent — in
+research, in CI, or in a security review — I'd genuinely like to know. Open a PR
+adding a line to this section, or
+[open an issue](https://github.com/assevra/assevra/issues/new). Real datasets and
+real failure modes are what sharpen the methodology.
+
+<!-- Add yourself:  - **Your project / org** — one line on how you use Assevra. -->
+
+## Good first issues
+
+New here and want to contribute? The
+[`good first issue`](https://github.com/assevra/assevra/labels/good%20first%20issue)
+label collects small, self-contained tasks — a new PII pattern, a trace adapter,
+a CI-gating example — each with a pointer to the file to change and how to test
+it. See [CONTRIBUTING.md](CONTRIBUTING.md) for the ground rules.
+
 ## How to cite
 
 > Divi, Veera Ravindra. *Assevra: A Reliability Scorecard for LLM Agents*, v0.3,
