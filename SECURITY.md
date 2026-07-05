@@ -38,17 +38,26 @@ embedded key alone proves only internal consistency, not who signed it.
 
 ## Official signing key
 
-Scorecards published by the maintainer are signed with a long-lived Ed25519 key.
-The public half is published here and on <https://assevra.ai> so anyone can pin
-it:
+Scorecards published by the maintainer (Veera Ravindra Divi) are signed with a
+long-lived Ed25519 key. Its public half is published here and on
+<https://assevra.ai> so anyone can pin it:
 
 ```
 # Assevra maintainer signing key (Ed25519, base64)
-# status: to be published — see "Publishing your own key" below
+dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=
 ```
 
-> Until a key is published above, treat any "official" signed scorecard with
-> caution and request the public key directly.
+To verify a scorecard signed with this key, save the line above to a file (say
+`assevra_official.txt`) and pass it to `--public-key`:
+
+```bash
+python -m assevra verify --scorecard scorecard.json --signature scorecard.sig.json \
+    --public-key assevra_official.txt
+```
+
+> Obtain this key from a channel you trust (this file over HTTPS, the project
+> site). A scorecard that verifies against any *other* key was not signed by the
+> maintainer.
 
 ## Publishing your own key
 

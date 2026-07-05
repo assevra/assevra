@@ -149,6 +149,23 @@
     </section>
 
     <section>
+      <h2>Verify a signed scorecard</h2>
+      <div class="card">
+        Scorecards published by the maintainer are signed with this Ed25519 public
+        key. Pin it to confirm a scorecard was produced by the maintainer and not
+        altered:
+        <div style="margin-top:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+          font-size:13px;background:#0d1117;color:#e6edf3;padding:10px 14px;border-radius:8px;
+          overflow-x:auto">dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=</div>
+        <div style="margin-top:10px;color:var(--muted);font-size:14px">
+          <code>assevra verify --scorecard scorecard.json --signature scorecard.sig.json --public-key &lt;this key&gt;</code>
+          &middot; details in
+          <a href="https://github.com/assevra/assevra/blob/main/SECURITY.md">SECURITY.md</a>
+        </div>
+      </div>
+    </section>
+
+    <section>
       <h2>Cite</h2>
       <div class="card">
         Divi, Veera Ravindra. <em>Assevra: A Reliability Scorecard for LLM Agents</em>,
