@@ -4,6 +4,19 @@ All notable changes to Assevra are recorded here. The project follows
 semantic-ish versioning; the reported "measured with Assevra vX.Y" number is
 bumped whenever a scorer or rubric change could change a reported score.
 
+## [Unreleased]
+
+### Changed
+- **Richer HTML scorecard.** The generated report is redesigned to match the
+  project site: a gradient header with the mark and verdict pill, an at-a-glance
+  stat strip (dimensions passed / rows scored / skipped), and — per dimension — a
+  **confidence-interval bar** that plots the score, its 95% Wilson band, and the
+  threshold line, making "report the interval, not just the mean" visual. Row
+  lists now show failing rows first and cap long datasets with a "+N more"
+  summary, and a footer prompts signing for a verifiable artifact. Purely a
+  rendering change — the scorecard JSON (and thus any signature) is unaffected.
+  The bundled `docs/example-scorecard.html` is regenerated as a full example.
+
 ## [0.3.0] — 2026-07-05
 
 ### Added
