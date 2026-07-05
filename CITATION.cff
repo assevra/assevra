@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use Assevra or report a score measured with it, please cite this project."
+title: "Assevra: A Reliability Scorecard for LLM Agents"
+abstract: >-
+  Assevra is an open reference implementation and a named methodology (the
+  Assevra Reliability Scorecard) for measuring the reliability of LLM agents
+  across four dimensions: grounding/faithfulness, safety/refusal, PII-leak, and
+  task-completion. Each dimension is scored with an explicit method (LLM-as-judge
+  or deterministic), a stated pass threshold, and a reported confidence interval.
+type: software
+authors:
+  - family-names: Divi
+    given-names: Veera Ravindra
+version: "0.1.0"
+date-released: "2026-07-04"
+license: MIT
+repository-code: "https://github.com/assevra/assevra"
+keywords:
+  - LLM
+  - AI agents
+  - reliability
+  - evaluation
+  - LLM-as-judge
+  - grounding
+  - PII
+  - safety

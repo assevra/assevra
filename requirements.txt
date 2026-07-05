@@ -1,0 +1,20 @@
+# Assevra runtime dependencies.
+#
+# The deterministic scorers (task-completion, and the PII gate's regex fallback)
+# run on the standard library alone. The two optional groups below unlock the
+# full engines.
+
+# --- PII scorer (deterministic, recommended) --------------------------------
+# Presidio gives rule + NER PII detection. Without it, the PII gate falls back
+# to a regex-only detector for the hard-block entities (see assevra/scorers/pii.py).
+# After installing, download the spaCy model Presidio uses:
+#   python -m spacy download en_core_web_lg
+presidio-analyzer>=2.2
+presidio-anonymizer>=2.2
+spacy>=3.7
+
+# --- Judge scorers (grounding, safety) --------------------------------------
+# The LLM-as-judge dimensions need the Anthropic SDK and an API key. When the
+# key is absent (e.g. forks, offline runs) these dimensions are skipped, not
+# failed. See assevra/judge.py.
+anthropic>=0.40

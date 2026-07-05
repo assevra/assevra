@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+
+# Assevra run artifacts (regenerate with `python -m assevra run`)
+scorecard.json
+scorecard.md
+scorecard.html
+scorecard-preview.png
+!examples/sample-scorecard.md
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
