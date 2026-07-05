@@ -7,6 +7,14 @@ bumped whenever a scorer or rubric change could change a reported score.
 ## [Unreleased]
 
 ### Added
+- **Agent Card (`assevra attest`).** Maps a scorecard's measured evidence to the
+  control families of the EU AI Act, NIST AI RMF (incl. the Generative AI
+  Profile), ISO/IEC 42001, and the OWASP Top 10 for LLM Applications — the
+  auditor/procurement-facing artifact that bridges eval results and a security
+  review. Writes `agent-card.md` and `agent-card.json`, notes signed provenance
+  when given a `--signature`, and is framed throughout as evidence/due-care, **not
+  a certification, compliance determination, or legal advice** (mappings are
+  indicative).
 - **Judge panels (a jury).** `run --judge-panel m1,m2,m3` scores the judge
   dimensions with several models and aggregates them — a 1–5 grounding score by
   median, a safety refusal verdict by majority — surfacing panelist

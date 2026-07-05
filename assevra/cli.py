@@ -332,6 +332,40 @@ def cmd_history(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_attest(args: argparse.Namespace) -> int:
+    from . import attest as attest_mod
+
+    if not Path(args.scorecard).is_file():
+        raise SystemExit(f"scorecard not found: {args.scorecard}")
+    try:
+        scorecard = json.loads(Path(args.scorecard).read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"[assevra] {args.scorecard}: invalid JSON: {exc}")
+
+    signature = None
+    if args.signature:
+        if not Path(args.signature).is_file():
+            raise SystemExit(f"signature not found: {args.signature}")
+        signature = json.loads(Path(args.signature).read_text(encoding="utf-8"))
+
+    generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    card = attest_mod.build_card_dict(scorecard, signature=signature, generated_at=generated_at)
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    md_path = out_dir / "agent-card.md"
+    json_path = out_dir / "agent-card.json"
+    md_path.write_text(attest_mod.render_markdown(card), encoding="utf-8")
+    json_path.write_text(attest_mod.render_json(card), encoding="utf-8")
+    print(f"[assevra] wrote {md_path}")
+    print(f"[assevra] wrote {json_path}")
+    print(
+        "[assevra] the Agent Card maps evidence to control families — it is NOT a "
+        "certification, a compliance determination, or legal advice."
+    )
+    return 0
+
+
 def cmd_calibrate(args: argparse.Namespace) -> int:
     from . import calibration as calib
 
@@ -580,6 +614,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="comma-separated judge models to use as a jury",
     )
     cal.set_defaults(func=cmd_calibrate)
+
+    att = sub.add_parser(
+        "attest",
+        help="map a scorecard to AI-governance control families (Agent Card)",
+    )
+    att.add_argument("--scorecard", required=True, help="path to scorecard.json")
+    att.add_argument(
+        "--signature",
+        default=None,
+        help="optional scorecard.sig.json, to note signed provenance on the card",
+    )
+    att.add_argument(
+        "--out-dir",
+        default=".",
+        help="directory to write agent-card.md and agent-card.json (default: .)",
+    )
+    att.set_defaults(func=cmd_attest)
 
     return parser
 

@@ -291,6 +291,27 @@ plain JSONL — commit it (or cache/restore it in CI) to keep the series across
 runs and machines. A regression prints a `Change since …` table and, with
 `--fail-on-regression`, exits non-zero.
 
+## Map to governance frameworks — the Agent Card
+
+Regulated-vertical buyers ask "prove the agent is safe," and their security review
+speaks in control frameworks, not eval metrics. `assevra attest` bridges the two:
+it turns a scorecard into an **Agent Card** that maps each measured dimension to
+the control families of the **EU AI Act**, the **NIST AI RMF** (incl. the
+Generative AI Profile), **ISO/IEC 42001**, and the **OWASP Top 10 for LLM
+Applications**.
+
+```bash
+python -m assevra attest --scorecard scorecard.json --out-dir .
+# ...and note signed provenance on the card:
+python -m assevra attest --scorecard scorecard.json --signature scorecard.sig.json
+```
+
+It writes `agent-card.md` and `agent-card.json`. **An Agent Card is evidence and
+due-care documentation — not a certification, a compliance determination, or
+legal advice.** Every framework requires substantially more than these
+measurements; the mappings are indicative and must be checked against the current
+text of each framework and your auditor's requirements.
+
 ## Troubleshooting
 
 - **`grounding` shows `SKIPPED`** — the LLM judge isn't configured. Run
