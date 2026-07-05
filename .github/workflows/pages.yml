@@ -1,0 +1,49 @@
+name: Deploy docs to GitHub Pages
+
+# Publishes docs/ to GitHub Pages via an Actions pipeline we control, with a
+# concurrency group so rapid consecutive pushes queue instead of colliding on
+# the single github-pages environment (the cause of the intermittent
+# "Deployment failed, try again later." under the default branch-source deploy).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Serialize deployments; let an in-progress deploy finish rather than cancelling
+# it (cancelling a live Pages deploy is what triggers the flaky failure).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload docs artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # docs/ contains index.html, the example scorecard, and CNAME
+          # (assevra.ai) — the custom domain travels with the artifact.
+          path: docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
