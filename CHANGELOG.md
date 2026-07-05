@@ -7,6 +7,13 @@ bumped whenever a scorer or rubric change could change a reported score.
 ## [Unreleased]
 
 ### Added
+- **pass^k and run-to-run consistency** — group repeated trials of the same input
+  with a shared `case_id` and the scorecard reports, per dimension, the
+  **consistency** (share of repeated cases whose trials all agree, with flaky
+  cases listed) and **pass^k** (unbiased estimate that k independent attempts all
+  pass, `C(passes,k)/C(trials,k)`). `run --pass-k K` sets k (default 2). Surfaces
+  in Markdown, JSON, and HTML; omitted entirely on single-trial datasets, so
+  existing scorecards are unchanged.
 - **Reliability trend tracking** — `assevra run --history <file>` records each run
   and compares it to the previous one, flagging a per-dimension move only when it
   falls outside the previous 95% interval or crosses a threshold (noise is

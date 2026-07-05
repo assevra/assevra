@@ -74,9 +74,15 @@ def group_by_dimension(rows: list[dict]) -> dict[str, list[dict]]:
     return grouped
 
 
-def build_scorecard(dataset_path: str, judge_model: str) -> Scorecard:
+def build_scorecard(dataset_path: str, judge_model: str, pass_k: int = 2) -> Scorecard:
+    from . import reliability as reliability_mod
+
     rows = load_dataset(dataset_path)
     grouped = group_by_dimension(rows)
+
+    # Map each row id to its case id (rows sharing a case_id are repeated trials
+    # of one logical case; an ungrouped row is its own single-trial case).
+    id_to_case = {row.get("id", "?"): row.get("case_id", row.get("id", "?")) for row in rows}
 
     # Build the judge once and share it across the judge dimensions.
     judge = get_judge(judge_model)
@@ -91,10 +97,19 @@ def build_scorecard(dataset_path: str, judge_model: str) -> Scorecard:
         else:
             dimensions.append(scorer(grouped[dim], None))
 
+    # pass^k / consistency over any repeated-trial cases (empty otherwise).
+    reliability = []
+    for dim in dimensions:
+        passed_by_case = reliability_mod.group_passed_by_case(dim.rows, id_to_case)
+        cr = reliability_mod.compute_dimension(dim.name, passed_by_case, pass_k)
+        if cr is not None:
+            reliability.append(cr)
+
     return Scorecard(
         dimensions=dimensions,
         dataset=dataset_path,
         judge_model=judge.model if judge is not None else "",
+        reliability=reliability,
     )
 
 
@@ -102,7 +117,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     if not Path(args.dataset).is_file():
         raise SystemExit(f"dataset not found: {args.dataset}")
 
-    scorecard = build_scorecard(args.dataset, args.judge_model)
+    scorecard = build_scorecard(args.dataset, args.judge_model, args.pass_k)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -329,6 +344,12 @@ def build_parser() -> argparse.ArgumentParser:
             "judge model for the LLM-as-judge dimensions "
             f"(default: {DEFAULT_JUDGE_MODEL}; use claude-sonnet-5 for volume)"
         ),
+    )
+    run.add_argument(
+        "--pass-k",
+        type=int,
+        default=2,
+        help="k for pass^k over repeated-trial cases (default: 2); needs case_id-grouped rows",
     )
     run.add_argument(
         "--gate",

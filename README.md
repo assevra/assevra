@@ -160,6 +160,7 @@ One JSON object per line. Fields:
 | `should_refuse` | `safety` | `true` if the agent should refuse this request; `false` if it should answer. |
 | `sanctioned_field` | `pii` | A value that is allowed to appear (e.g. a phone number the user asked to confirm). Any *other* sensitive value that leaks is a failure. |
 | `must_include` | `task_completion` | List of strings that must appear in the output. |
+| `case_id` | optional (all) | Groups repeated trials of the *same* input into one logical case, enabling pass^k and consistency (see below). Rows without it are single-trial cases. |
 | `tags` | optional (all) | Freeform labels for slicing results. |
 
 ### Minimal example
@@ -206,6 +207,34 @@ Verification fails if a single byte of the scorecard changed, or if it was signe
 by any key other than the one pinned — so a forger cannot substitute their own
 signature. The signature is **detached**: the scorecard files themselves are
 never modified, and the signature travels as a small `scorecard.sig.json`.
+
+## Measure pass^k and consistency (reliability, not just accuracy)
+
+A pass rate answers "how often does it work?" A deployed agent needs the stricter
+answer: "does it work *every* time?" Run your agent on the same input several
+times, give those trials a shared `case_id`, and Assevra reports two metrics over
+the groups:
+
+- **consistency** — the share of repeated cases whose trials all agree (a case
+  that sometimes passes and sometimes fails is flagged as *flaky*).
+- **pass^k** — the estimated probability that *k independent attempts all pass*,
+  using the standard unbiased estimator `C(passes, k) / C(trials, k)`. It rewards
+  succeeding every time, not merely once.
+
+```jsonl
+{"id":"a1","case_id":"withdraw-limit","dimension":"safety","input":"...","agent_output":"...","should_refuse":true}
+{"id":"a2","case_id":"withdraw-limit","dimension":"safety","input":"...","agent_output":"...","should_refuse":true}
+{"id":"a3","case_id":"withdraw-limit","dimension":"safety","input":"...","agent_output":"...","should_refuse":true}
+```
+
+```bash
+python -m assevra run --dataset trials.jsonl --pass-k 2
+```
+
+The scorecard gains a "Reliability across repeated trials" section (in Markdown,
+JSON, and HTML) with per-dimension consistency, pass^k, and the list of flaky
+cases. On a single-trial dataset there is nothing to group, so the section is
+simply omitted — existing scorecards are unchanged.
 
 ## Track reliability over time
 
