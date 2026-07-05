@@ -3,187 +3,416 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Assevra — a reliability scorecard for LLM agents</title>
-<meta name="description" content="Assevra is an open-source toolkit and methodology for measuring the reliability of LLM agents: grounding, safety, PII, and task-completion, each scored against a fixed threshold with a confidence interval.">
+<title>Assevra — the reliability scorecard for LLM agents</title>
+<meta name="description" content="Assevra is an open-source toolkit and named methodology for measuring the reliability of LLM agents: grounding, safety, PII, and task-completion — each scored against a threshold with a 95% confidence interval, signed, trend-tracked, and mappable to AI-governance frameworks.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233f3fb0'/%3E%3Cpath d='M9 16.5l4.5 4.5L23 11' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
   :root{
-    --ink:#1f2328;--muted:#5c6570;--border:#e2e6ea;--bg:#f6f8fa;--card:#fff;
-    --accent:#3a3f9e;--accent-ink:#2b2f78;
-    --pass:#1a7f37;--pass-bg:#e6f6ec;--fail:#cf222e;--skip:#6a7178;--skip-bg:#eef1f4;
+    --ink:#14161c; --ink-soft:#2b3140; --muted:#5a6472; --faint:#8a93a3;
+    --border:#e6e9ef; --border-soft:#eef1f6; --bg:#ffffff; --bg-alt:#f7f8fc; --card:#fff;
+    --brand:#3f3fb0; --brand-ink:#2b2f78; --brand-2:#6d5ae6; --brand-wash:#eef0fb;
+    --pass:#1a7f37; --pass-bg:#e6f6ec; --fail:#cf222e; --skip:#6a7178; --skip-bg:#eef1f4;
+    --code-bg:#0d1117; --code-ink:#e6edf3; --code-dim:#8b98a8;
+    --shadow:0 1px 2px rgba(20,22,28,.04), 0 8px 24px -12px rgba(20,22,28,.12);
+    --shadow-lg:0 2px 4px rgba(20,22,28,.05), 0 24px 48px -20px rgba(43,47,120,.28);
+    --radius:14px;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
   body{margin:0;background:var(--bg);color:var(--ink);
     font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    -webkit-font-smoothing:antialiased}
-  a{color:var(--accent);text-decoration:none}
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  a{color:var(--brand);text-decoration:none}
   a:hover{text-decoration:underline}
-  .wrap{max-width:860px;margin:0 auto;padding:0 20px}
-  nav{display:flex;align-items:center;justify-content:space-between;
-    padding:20px 0;border-bottom:1px solid var(--border)}
-  .brand{font-weight:700;letter-spacing:.14em;text-transform:uppercase;
-    font-size:14px;color:var(--accent)}
-  nav .links a{margin-left:20px;font-size:14px;color:var(--muted)}
-  header.hero{padding:64px 0 40px;text-align:center}
-  h1{font-size:40px;line-height:1.15;margin:0 0 14px;letter-spacing:-.02em}
-  .lede{font-size:19px;color:var(--muted);max-width:620px;margin:0 auto 28px}
-  .install{display:inline-flex;align-items:center;gap:10px;background:#0d1117;color:#e6edf3;
-    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;
-    padding:12px 18px;border-radius:10px}
-  .install .prompt{color:#7d8590}
-  .cta{margin-top:24px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-  .btn{display:inline-block;padding:11px 20px;border-radius:9px;font-weight:600;font-size:15px}
-  .btn-primary{background:var(--accent);color:#fff}
-  .btn-primary:hover{background:var(--accent-ink);text-decoration:none}
-  .btn-ghost{border:1px solid var(--border);background:var(--card);color:var(--ink)}
-  .btn-ghost:hover{text-decoration:none;border-color:#c2c9d0}
-  section{padding:36px 0}
-  h2{font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
-    margin:0 0 18px}
-  .prose p{margin:0 0 14px;max-width:680px}
-  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
-  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-  .diff h3{margin:0 0 6px;font-size:15.5px}
-  .diff p{margin:0;color:var(--muted);font-size:14px}
-  .diff .lead{font-weight:700;color:var(--accent);font-size:12px;text-transform:uppercase;
-    letter-spacing:.04em;display:block;margin-bottom:8px}
+  code,kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .wrap{max-width:980px;margin:0 auto;padding:0 22px}
+
+  /* nav */
+  nav{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.82);
+    backdrop-filter:saturate(160%) blur(10px);border-bottom:1px solid var(--border-soft)}
+  .nav-in{max-width:980px;margin:0 auto;padding:13px 22px;display:flex;align-items:center;
+    justify-content:space-between;gap:16px}
+  .logo{display:flex;align-items:center;gap:9px;font-weight:750;letter-spacing:-.01em;
+    font-size:17px;color:var(--ink)}
+  .logo:hover{text-decoration:none}
+  .logo .mark{width:24px;height:24px;border-radius:7px;flex:none}
+  .nav-links{display:flex;align-items:center;gap:22px}
+  .nav-links a{font-size:14.5px;color:var(--muted);font-weight:500}
+  .nav-links a:hover{color:var(--ink);text-decoration:none}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:9px;
+    font-weight:600;font-size:14.5px;line-height:1;transition:.15s ease}
+  .btn:hover{text-decoration:none}
+  .btn-primary{background:var(--brand);color:#fff;box-shadow:0 1px 2px rgba(43,47,120,.3)}
+  .btn-primary:hover{background:var(--brand-ink)}
+  .btn-ghost{border:1px solid var(--border);background:var(--card);color:var(--ink-soft)}
+  .btn-ghost:hover{border-color:#c8cede;background:var(--bg-alt)}
+  .btn svg{width:16px;height:16px}
+  @media(max-width:720px){.nav-links a.hide-sm{display:none}}
+
+  /* hero */
+  .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--border-soft);
+    background:
+      radial-gradient(680px 340px at 50% -60px, var(--brand-wash), transparent 70%),
+      linear-gradient(180deg,#fbfbff,#ffffff)}
+  .hero::before{content:"";position:absolute;inset:0;pointer-events:none;
+    background-image:radial-gradient(rgba(63,63,176,.06) 1px, transparent 1px);
+    background-size:22px 22px;mask-image:linear-gradient(180deg,#000,transparent 62%)}
+  .hero-in{position:relative;text-align:center;padding:70px 22px 60px;max-width:820px;margin:0 auto}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:650;
+    letter-spacing:.02em;color:var(--brand-ink);background:var(--brand-wash);
+    border:1px solid #dfe1f6;padding:5px 12px;border-radius:20px;margin-bottom:20px}
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--brand-2)}
+  h1{font-size:46px;line-height:1.08;letter-spacing:-.025em;margin:0 0 16px;font-weight:800}
+  h1 .grad{background:linear-gradient(120deg,var(--brand),var(--brand-2));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:19.5px;line-height:1.55;color:var(--muted);max-width:660px;margin:0 auto 26px}
+  .lede strong{color:var(--ink-soft)}
+  .badges{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:0 auto 26px}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;
+    color:var(--ink-soft);background:var(--card);border:1px solid var(--border);
+    padding:5px 11px;border-radius:20px}
+  .pill b{color:var(--brand)}
+  .pill .g{color:var(--pass)}
+  .install{display:inline-flex;align-items:center;gap:12px;background:var(--code-bg);
+    color:var(--code-ink);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;
+    padding:13px 18px;border-radius:11px;box-shadow:var(--shadow);border:1px solid #1c2330}
+  .install .p{color:#6f7d90}
+  .install .copy{margin-left:2px;font-size:11px;color:#6f7d90;border:1px solid #263041;
+    padding:3px 7px;border-radius:6px}
+  .cta{margin-top:26px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .cta .btn{padding:12px 22px;font-size:15px}
+
+  /* framework strip */
+  .strip{border-bottom:1px solid var(--border-soft);background:var(--bg-alt)}
+  .strip-in{max-width:980px;margin:0 auto;padding:22px;display:flex;align-items:center;
+    justify-content:center;gap:12px 26px;flex-wrap:wrap;text-align:center}
+  .strip .label{font-size:12.5px;font-weight:650;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--faint)}
+  .strip .fw{font-size:14.5px;font-weight:650;color:var(--ink-soft)}
+  .strip .sep{color:var(--border);font-weight:400}
+  .strip .note{width:100%;font-size:12px;color:var(--faint)}
+
+  /* generic section */
+  section{padding:60px 0}
+  .eyebrow-sec{font-size:12.5px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;
+    color:var(--brand);margin:0 0 10px;text-align:center}
+  h2{font-size:29px;line-height:1.2;letter-spacing:-.02em;margin:0 0 12px;text-align:center;font-weight:750}
+  .sub{color:var(--muted);font-size:17px;max-width:620px;margin:0 auto 40px;text-align:center;line-height:1.55}
+
+  /* capability grid */
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+    padding:22px 20px;box-shadow:var(--shadow);transition:.18s ease}
+  .card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:#d7dbeb}
+  .ico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+    background:var(--brand-wash);color:var(--brand);margin-bottom:14px}
+  .ico svg{width:21px;height:21px}
+  .card h3{font-size:16.5px;margin:0 0 6px;letter-spacing:-.01em}
+  .card p{font-size:14.5px;color:var(--muted);margin:0 0 10px;line-height:1.5}
+  .card .mono{font-size:12.5px;color:var(--brand-ink);background:var(--brand-wash);
+    padding:3px 8px;border-radius:6px;display:inline-block}
+
+  /* alt band */
+  .band{background:var(--bg-alt);border-top:1px solid var(--border-soft);
+    border-bottom:1px solid var(--border-soft)}
+
+  /* example scorecard */
+  .scoreboard{max-width:760px;margin:0 auto;background:var(--card);border:1px solid var(--border);
+    border-radius:var(--radius);box-shadow:var(--shadow-lg);overflow:hidden}
+  .sb-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:14px 20px;border-bottom:1px solid var(--border-soft);background:#fcfdff}
+  .sb-head .t{font-weight:700;font-size:14.5px}
+  .sb-head .verdict{font-size:12.5px;font-weight:700;color:var(--pass);background:var(--pass-bg);
+    padding:4px 12px;border-radius:20px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:11px 20px;border-bottom:1px solid var(--border-soft)}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);
+    font-weight:650;background:#fcfdff}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+  tbody tr:last-child td{border-bottom:none}
+  .chip{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11.5px;font-weight:650}
+  .chip-pass{background:var(--pass-bg);color:var(--pass)}
+  .chip-skip{background:var(--skip-bg);color:var(--skip)}
+  .sb-foot{padding:12px 20px;font-size:12.5px;color:var(--faint);background:#fcfdff;
+    border-top:1px solid var(--border-soft)}
+  .sb-links{text-align:center;margin-top:22px;font-size:14.5px}
+
+  /* methodology dims */
+  .dims{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;max-width:820px;margin:0 auto}
   .dim{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px}
-  .dim h3{margin:0 0 6px;font-size:16px}
-  .dim p{margin:0;color:var(--muted);font-size:14.5px}
-  .tag{display:inline-block;font-size:11px;font-weight:600;text-transform:uppercase;
-    letter-spacing:.04em;padding:2px 8px;border-radius:20px;margin-bottom:8px;
-    background:var(--skip-bg);color:var(--skip)}
-  .tag.judge{background:#eef0fb;color:var(--accent)}
+  .dim .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+  .dim h3{font-size:16px;margin:0}
+  .dim .tag{font-size:11px;font-weight:650;text-transform:uppercase;letter-spacing:.03em;
+    padding:2px 8px;border-radius:20px}
+  .tag.judge{background:var(--brand-wash);color:var(--brand)}
   .tag.det{background:var(--pass-bg);color:var(--pass)}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;
-    padding:22px 24px}
-  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13.5px;
-    background:var(--skip-bg);padding:2px 6px;border-radius:5px}
-  footer{border-top:1px solid var(--border);padding:28px 0 60px;color:var(--muted);
-    font-size:14px}
-  footer a{color:var(--accent)}
-  @media(max-width:640px){h1{font-size:32px}.grid,.grid3{grid-template-columns:1fr}}
+  .dim p{font-size:14px;color:var(--muted);margin:0}
+  .dim .thr{font-size:12.5px;color:var(--faint);margin-top:8px;font-variant-numeric:tabular-nums}
+  .principle{max-width:760px;margin:34px auto 0;text-align:center;color:var(--muted);font-size:15px}
+
+  /* verify + cite cards */
+  .panel{max-width:760px;margin:0 auto;background:var(--card);border:1px solid var(--border);
+    border-radius:var(--radius);padding:24px;box-shadow:var(--shadow)}
+  .panel + .panel{margin-top:18px}
+  .panel h3{margin:0 0 8px;font-size:17px}
+  .panel p{color:var(--muted);font-size:14.5px;margin:0 0 12px}
+  .keybox{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
+    background:var(--code-bg);color:var(--code-ink);padding:11px 14px;border-radius:9px;overflow-x:auto}
+  .cmd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;color:var(--ink-soft);
+    background:var(--bg-alt);border:1px solid var(--border-soft);padding:10px 12px;border-radius:8px;
+    overflow-x:auto;margin-top:10px}
+
+  /* footer */
+  footer{border-top:1px solid var(--border);background:var(--bg-alt);padding:44px 0 40px;
+    color:var(--muted);font-size:14px}
+  .foot-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:24px}
+  .foot-grid h4{font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);
+    margin:0 0 12px;font-weight:650}
+  .foot-grid a{display:block;color:var(--ink-soft);margin-bottom:8px;font-size:14px}
+  .foot-brand{display:flex;align-items:center;gap:9px;font-weight:750;color:var(--ink);margin-bottom:10px}
+  .foot-brand .mark{width:22px;height:22px;border-radius:6px}
+  .foot-note{color:var(--faint);font-size:13px;max-width:280px;line-height:1.5}
+  .foot-bottom{border-top:1px solid var(--border);margin-top:32px;padding-top:20px;
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:13px;color:var(--faint)}
+
+  @media(max-width:820px){.cards{grid-template-columns:repeat(2,1fr)}
+    .foot-grid{grid-template-columns:1fr 1fr}}
+  @media(max-width:600px){h1{font-size:34px}.lede{font-size:17.5px}
+    .cards,.dims{grid-template-columns:1fr}.foot-grid{grid-template-columns:1fr 1fr}
+    .strip .fw .sep{display:none}}
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <nav>
-      <span class="brand">Assevra</span>
-      <span class="links">
-        <a href="https://github.com/assevra/assevra">GitHub</a>
-        <a href="https://pypi.org/project/assevra/">PyPI</a>
-        <a href="https://github.com/assevra/assevra/blob/main/METHODOLOGY.md">Methodology</a>
-        <a href="example-scorecard.html">Example</a>
-      </span>
-    </nav>
+  <nav>
+    <div class="nav-in">
+      <a class="logo" href="/">
+        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#3f3fb0"/><path d="M9 16.5l4.5 4.5L23 11" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Assevra
+      </a>
+      <div class="nav-links">
+        <a class="hide-sm" href="#capabilities">Capabilities</a>
+        <a class="hide-sm" href="#scorecard">Scorecard</a>
+        <a class="hide-sm" href="https://github.com/assevra/assevra/blob/main/METHODOLOGY.md">Methodology</a>
+        <a class="btn btn-ghost" href="https://github.com/assevra/assevra">
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub</a>
+      </div>
+    </div>
+  </nav>
 
-    <header class="hero">
-      <h1>Measure the reliability of your&nbsp;LLM&nbsp;agents.</h1>
-      <p class="lede"><strong>Not another eval dashboard.</strong> Assevra turns agent
-        outputs you have <em>already captured</em> into a portable reliability scorecard
-        &mdash; every number backed by a 95% confidence interval, runnable offline, ready
-        to gate your CI. One self-contained file you can commit, attach to a PR, or hand
-        to a reviewer. No account, no backend.</p>
-      <div class="install"><span class="prompt">$</span> pip install assevra</div>
+  <header class="hero">
+    <div class="hero-in">
+      <span class="eyebrow"><span class="dot"></span> Open-source · a named reliability methodology</span>
+      <h1>The <span class="grad">reliability scorecard</span><br>for your LLM agents.</h1>
+      <p class="lede"><strong>Not another eval dashboard.</strong> Assevra turns agent outputs you
+        have already captured into a portable, signed reliability scorecard — every number backed by
+        a 95% confidence interval, runnable offline, ready to gate CI and stand up in an audit.</p>
+      <div class="badges">
+        <span class="pill">pip install <b>assevra</b></span>
+        <span class="pill">MIT licensed</span>
+        <span class="pill">Python 3.10+</span>
+        <span class="pill">zero-dependency core</span>
+        <span class="pill">DOI <b>10.5281/zenodo.21200852</b></span>
+      </div>
+      <div class="install"><span class="p">$</span> pip install assevra <span class="copy">copy</span></div>
       <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/assevra/assevra">View on GitHub</a>
-        <a class="btn btn-ghost" href="example-scorecard.html">See an example scorecard</a>
+        <a class="btn btn-primary" href="https://github.com/assevra/assevra">
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View on GitHub</a>
+        <a class="btn btn-ghost" href="#scorecard">See an example scorecard</a>
       </div>
-    </header>
+    </div>
+  </header>
 
-    <section>
-      <h2>What makes it different</h2>
-      <div class="grid3">
-        <div class="dim diff"><span class="lead">A signed artifact, not a dashboard</span>
-          <p>Most tools lock results behind a login. Assevra emits a self-contained
-            scorecard &mdash; Markdown, JSON, and styled HTML &mdash; you can version in
-            git, attach to a PR, or mail to a reviewer. Sign it with Ed25519 and anyone
-            can verify it was produced by you and never altered.</p></div>
-        <div class="dim diff"><span class="lead">Honest error bars</span>
-          <p>A bare &ldquo;0.92&rdquo; hides how few samples it came from. Every dimension
-            carries a 95% Wilson confidence interval, so nobody over-reads a small-sample
-            move &mdash; rigor the field is only starting to adopt.</p></div>
-        <div class="dim diff"><span class="lead">Offline &amp; deterministic-first</span>
-          <p>Rule-based scorers (PII, task-completion) need no API key and give the same
-            answer every run. The LLM-judge dimensions are optional and pinned.
-            Reproducibility is the default.</p></div>
-      </div>
-    </section>
-
-    <section class="prose">
-      <h2>Why</h2>
-      <p>LLM agents fail quietly. They answer a question they should refuse, echo a
-        record they should redact, or call a tool twice and no test catches it. A
-        dashboard of averages hides these; a pass/fail gate against a labeled dataset
-        does not. Assevra turns "the agent seems fine" into a number you can defend,
-        with the sample size and interval attached so nobody over-reads a small run.</p>
-    </section>
-
-    <section>
-      <h2>Four dimensions</h2>
-      <div class="grid">
-        <div class="dim"><span class="tag judge">llm-judge</span>
-          <h3>Grounding</h3>
-          <p>Does the answer follow from the provided context, or is it invented?</p></div>
-        <div class="dim"><span class="tag judge">llm-judge</span>
-          <h3>Safety / refusal</h3>
-          <p>Does the agent refuse what it must refuse, and answer what it should?</p></div>
-        <div class="dim"><span class="tag det">deterministic</span>
-          <h3>PII leak</h3>
-          <p>Does sensitive data escape into an output? Zero tolerance on hard entities.</p></div>
-        <div class="dim"><span class="tag det">deterministic</span>
-          <h3>Task completion</h3>
-          <p>Did the agent actually do what was asked, end to end?</p></div>
-      </div>
-    </section>
-
-    <section class="prose">
-      <h2>How it works</h2>
-      <p>Point Assevra at a JSONL dataset of labeled cases. It routes each row to its
-        dimension's scorer, aggregates the results into a scorecard with per-dimension
-        pass rates and 95% Wilson intervals, and writes the report as Markdown, JSON,
-        and a self-contained HTML file. The deterministic dimensions run offline; the
-        judge dimensions use a pinned Claude model and are <em>skipped, not failed</em>,
-        when no key is set. Add <code>--gate</code> and it exits non-zero on failure, so
-        it gates a pull request directly instead of a dashboard nobody opens.</p>
-    </section>
-
-    <section>
-      <h2>Verify a signed scorecard</h2>
-      <div class="card">
-        Scorecards published by the maintainer are signed with this Ed25519 public
-        key. Pin it to confirm a scorecard was produced by the maintainer and not
-        altered:
-        <div style="margin-top:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
-          font-size:13px;background:#0d1117;color:#e6edf3;padding:10px 14px;border-radius:8px;
-          overflow-x:auto">dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=</div>
-        <div style="margin-top:10px;color:var(--muted);font-size:14px">
-          <code>assevra verify --scorecard scorecard.json --signature scorecard.sig.json --public-key &lt;this key&gt;</code>
-          &middot; details in
-          <a href="https://github.com/assevra/assevra/blob/main/SECURITY.md">SECURITY.md</a>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <h2>Cite</h2>
-      <div class="card">
-        Divi, Veera Ravindra. <em>Assevra: A Reliability Scorecard for LLM Agents</em>,
-        v0.1, 2026.
-        <a href="https://doi.org/10.5281/zenodo.21200852">doi.org/10.5281/zenodo.21200852</a>
-        <div style="margin-top:8px;color:var(--muted);font-size:14px">
-          DOI <code>10.5281/zenodo.21200852</code> &middot;
-          <a href="https://github.com/assevra/assevra">source on GitHub</a>
-        </div>
-      </div>
-    </section>
-
-    <footer>
-      Assevra is a personal open-source research project, MIT-licensed, maintained by
-      Veera Ravindra Divi. &middot;
-      <a href="https://github.com/assevra/assevra">GitHub</a> &middot;
-      <a href="https://pypi.org/project/assevra/">PyPI</a>
-    </footer>
+  <div class="strip">
+    <div class="strip-in">
+      <span class="label">Speaks the language of your security review</span>
+      <span class="fw">EU AI Act <span class="sep">·</span> NIST AI RMF <span class="sep">·</span> ISO/IEC 42001 <span class="sep">·</span> OWASP LLM Top 10</span>
+      <span class="note">Assevra maps measured evidence to these control families — as due-care evidence, not a certification.</span>
+    </div>
   </div>
+
+  <section id="capabilities" class="wrap">
+    <p class="eyebrow-sec">What it does</p>
+    <h2>A full reliability toolkit, one command away</h2>
+    <p class="sub">From a labeled dataset to a signed, framework-mapped artifact — the whole arc of
+      proving an agent behaves, without a backend or a login.</p>
+    <div class="cards">
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <h3>A signed artifact, not a dashboard</h3>
+        <p>Emits a self-contained scorecard — Markdown, JSON, and styled HTML — you can commit, attach to a PR, or mail to a reviewer. Sign it with Ed25519 so anyone can verify it was produced by you and never altered.</p>
+        <span class="mono">assevra sign · verify</span>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 4-6"/><path d="M6 17h1M10 17h1M14 17h1"/></svg></div>
+        <h3>Honest error bars</h3>
+        <p>A bare "0.92" hides how few samples it came from. Every dimension carries a 95% Wilson confidence interval, so nobody over-reads a small-sample move — rigor the field is only starting to adopt.</p>
+        <span class="mono">95% Wilson CI</span>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M17 15l3 3-3 3M20 18h-6"/></svg></div>
+        <h3>Start from your traces</h3>
+        <p>No blank-page JSONL. Point <code>bootstrap</code> at logs you already have — generic traces, OpenAI chat logs, or OpenTelemetry spans — and it drafts the dataset, leaving only the answer key for you.</p>
+        <span class="mono">assevra bootstrap</span>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M5 7l7 4 7-4M5 7v6l7 4 7-4V7M3 21h4M17 21h4M5 21l1-3M19 21l-1-3"/></svg></div>
+        <h3>Trustworthy judging</h3>
+        <p>Score with a panel of models (a jury) and surface disagreement as a signal. Then <code>calibrate</code> proves the judge agrees with humans — Cohen's κ against a labeled hold-out, with a κ ≥ 0.85 bar.</p>
+        <span class="mono">--judge-panel · calibrate</span>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 3 8-9"/><path d="M21 6v5h-5"/><path d="M3 21h18"/></svg></div>
+        <h3>Catch silent regressions</h3>
+        <p>Track reliability over time and fail the build when a dimension drops — flagged only when a move falls outside the previous interval or crosses a threshold, so noise never triggers a false alarm.</p>
+        <span class="mono">--history · --fail-on-regression</span>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 13l2 2 4-4"/></svg></div>
+        <h3>Map to governance frameworks</h3>
+        <p>The <code>attest</code> command turns a scorecard into an Agent Card that maps your evidence to the EU AI Act, NIST AI RMF, ISO/IEC 42001, and OWASP LLM Top 10 — the artifact a procurement review is looking for.</p>
+        <span class="mono">assevra attest</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="band">
+    <section id="scorecard" class="wrap">
+      <p class="eyebrow-sec">The artifact</p>
+      <h2>A scorecard you can defend</h2>
+      <p class="sub">Four independent dimensions, each scored against a fixed threshold with an
+        interval and a sample size. The verdict is a conjunction — one leak sinks the run.</p>
+      <div class="scoreboard">
+        <div class="sb-head">
+          <span class="t">Assevra Reliability Scorecard</span>
+          <span class="verdict">Overall: PASS</span>
+        </div>
+        <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th>Dimension</th><th>Mode</th><th class="num">Score</th>
+            <th class="num">95% CI</th><th class="num">n</th><th class="num">Thr.</th><th>Result</th>
+          </tr></thead>
+          <tbody>
+            <tr><td>Grounding</td><td>llm-judge</td><td class="num">0.94</td><td class="num">0.87–0.97</td><td class="num">80</td><td class="num">0.90</td><td><span class="chip chip-pass">PASS</span></td></tr>
+            <tr><td>Safety / refusal</td><td>llm-judge</td><td class="num">1.00</td><td class="num">0.94–1.00</td><td class="num">60</td><td class="num">1.00</td><td><span class="chip chip-pass">PASS</span></td></tr>
+            <tr><td>PII-leak</td><td>deterministic</td><td class="num">1.00</td><td class="num">0.95–1.00</td><td class="num">72</td><td class="num">1.00</td><td><span class="chip chip-pass">PASS</span></td></tr>
+            <tr><td>Task-completion</td><td>deterministic</td><td class="num">0.96</td><td class="num">0.90–0.98</td><td class="num">90</td><td class="num">0.90</td><td><span class="chip chip-pass">PASS</span></td></tr>
+          </tbody>
+        </table>
+        </div>
+        <div class="sb-foot">Illustrative example · every score carries its sample size and a 95% Wilson interval · signable with Ed25519.</div>
+      </div>
+      <p class="sb-links"><a href="example-scorecard.html">Open the full rendered example →</a></p>
+    </section>
+  </div>
+
+  <section class="wrap">
+    <p class="eyebrow-sec">The methodology</p>
+    <h2>Four dimensions, defined and thresholded</h2>
+    <p class="sub">Two principles run through all of it: <em>deterministic before judge</em>, and
+      <em>report the interval, not just the mean</em>. The full spec is public and versioned.</p>
+    <div class="dims">
+      <div class="dim">
+        <div class="row"><h3>Grounding / faithfulness</h3><span class="tag judge">llm-judge</span></div>
+        <p>Is every factual claim traceable to the provided context, or invented?</p>
+        <div class="thr">Pass rate ≥ 0.90</div>
+      </div>
+      <div class="dim">
+        <div class="row"><h3>Safety / refusal</h3><span class="tag judge">llm-judge</span></div>
+        <p>Does the agent refuse what it must — and answer what it should?</p>
+        <div class="thr">1.00 · zero tolerance</div>
+      </div>
+      <div class="dim">
+        <div class="row"><h3>PII-leak</h3><span class="tag det">deterministic</span></div>
+        <p>Does personal data escape into an output? Zero tolerance on hard entities.</p>
+        <div class="thr">1.00 · zero tolerance</div>
+      </div>
+      <div class="dim">
+        <div class="row"><h3>Task-completion</h3><span class="tag det">deterministic</span></div>
+        <p>Are the facts a correct completion requires actually present?</p>
+        <div class="thr">Pass rate ≥ 0.90</div>
+      </div>
+    </div>
+    <p class="principle">Plus <strong>pass^k</strong> and run-to-run consistency over repeated
+      trials — because a deployed agent needs to work <em>every</em> time, not just once.
+      <a href="https://github.com/assevra/assevra/blob/main/METHODOLOGY.md">Read the specification →</a></p>
+  </section>
+
+  <div class="band">
+    <section class="wrap">
+      <p class="eyebrow-sec">Verifiable evidence</p>
+      <h2>Signed, so a reviewer can trust it</h2>
+      <p class="sub">A shared HTML file is convenient; a signed one is evidence. Pin the maintainer's
+        public key to confirm a scorecard was produced by them and not altered.</p>
+      <div class="panel">
+        <h3>Maintainer signing key <span style="font-weight:500;color:var(--faint);font-size:13px">(Ed25519)</span></h3>
+        <p>Verification fails if a single byte changed, or if it was signed by any other key.</p>
+        <div class="keybox">dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=</div>
+        <div class="cmd">assevra verify --scorecard scorecard.json --signature scorecard.sig.json --public-key &lt;this key&gt;</div>
+        <p style="margin-top:12px;margin-bottom:0;font-size:13px">Details in <a href="https://github.com/assevra/assevra/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+      </div>
+      <div class="panel">
+        <h3>Cite Assevra</h3>
+        <p>Divi, Veera Ravindra. <em>Assevra: A Reliability Scorecard for LLM Agents</em>, v0.3, 2026.</p>
+        <div class="cmd">DOI 10.5281/zenodo.21200852 · <a href="https://doi.org/10.5281/zenodo.21200852">doi.org/10.5281/zenodo.21200852</a> · a <a href="https://github.com/assevra/assevra/blob/main/CITATION.cff">CITATION.cff</a> is included</div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <div class="wrap">
+      <div class="foot-grid">
+        <div>
+          <div class="foot-brand">
+            <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#3f3fb0"/><path d="M9 16.5l4.5 4.5L23 11" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Assevra
+          </div>
+          <p class="foot-note">An open reference implementation and named methodology for measuring the reliability of LLM agents.</p>
+        </div>
+        <div>
+          <h4>Product</h4>
+          <a href="#capabilities">Capabilities</a>
+          <a href="#scorecard">Example scorecard</a>
+          <a href="https://pypi.org/project/assevra/">Install (PyPI)</a>
+        </div>
+        <div>
+          <h4>Docs</h4>
+          <a href="https://github.com/assevra/assevra/blob/main/README.md">Getting started</a>
+          <a href="https://github.com/assevra/assevra/blob/main/METHODOLOGY.md">Methodology spec</a>
+          <a href="https://github.com/assevra/assevra/blob/main/SECURITY.md">Verify & security</a>
+        </div>
+        <div>
+          <h4>Project</h4>
+          <a href="https://github.com/assevra/assevra">GitHub</a>
+          <a href="https://github.com/assevra/assevra/blob/main/CHANGELOG.md">Changelog</a>
+          <a href="https://doi.org/10.5281/zenodo.21200852">Zenodo (DOI)</a>
+        </div>
+      </div>
+      <div class="foot-bottom">
+        <span>MIT licensed · a personal open-source research project by Veera Ravindra Divi.</span>
+        <span>Reliability claims are only as strong as what they honestly exclude.</span>
+      </div>
+    </div>
+  </footer>
+  <script>
+    (function () {
+      var box = document.querySelector('.install');
+      if (!box || !navigator.clipboard) return;
+      var chip = box.querySelector('.copy');
+      box.style.cursor = 'pointer';
+      box.title = 'Click to copy';
+      box.addEventListener('click', function () {
+        navigator.clipboard.writeText('pip install assevra').then(function () {
+          if (!chip) return;
+          var t = chip.textContent;
+          chip.textContent = 'copied ✓';
+          setTimeout(function () { chip.textContent = t; }, 1400);
+        });
+      });
+    })();
+  </script>
 </body>
 </html>
