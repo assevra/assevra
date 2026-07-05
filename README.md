@@ -1,6 +1,8 @@
 # Assevra
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/assevra.svg)](https://pypi.org/project/assevra/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21200852.svg)](https://doi.org/10.5281/zenodo.21200852)
 
 *Assevra* — from *asseverate*, to solemnly attest. A reference implementation
 and a named methodology for measuring the reliability of LLM agents: the
@@ -117,9 +119,12 @@ what they honestly exclude.
 ## How to cite
 
 > Divi, Veera Ravindra. *Assevra: A Reliability Scorecard for LLM Agents*, v0.1,
-> 2026. https://github.com/assevra/assevra
+> 2026. https://doi.org/10.5281/zenodo.21200852
 
-A [`CITATION.cff`](CITATION.cff) is included; GitHub renders a "Cite this
+The project is archived on Zenodo with a citable DOI:
+**[10.5281/zenodo.21200852](https://doi.org/10.5281/zenodo.21200852)** (the
+concept DOI — always resolves to the latest version). A
+[`CITATION.cff`](CITATION.cff) is included; GitHub renders a "Cite this
 repository" button from it. When you report a number, say it was *measured with
 Assevra v0.1*.
 

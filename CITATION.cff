@@ -14,6 +14,14 @@ authors:
 version: "0.1.0"
 date-released: "2026-07-04"
 license: MIT
+doi: 10.5281/zenodo.21200852
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.21200852
+    description: The concept DOI (always resolves to the latest version).
+  - type: doi
+    value: 10.5281/zenodo.21200853
+    description: The DOI for version 0.1.0.
 repository-code: "https://github.com/assevra/assevra"
 keywords:
   - LLM
