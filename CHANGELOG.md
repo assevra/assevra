@@ -4,6 +4,16 @@ All notable changes to Assevra are recorded here. The project follows
 semantic-ish versioning; the reported "measured with Assevra vX.Y" number is
 bumped whenever a scorer or rubric change could change a reported score.
 
+## [Unreleased]
+
+### Added
+- **Reliability trend tracking** — `assevra run --history <file>` records each run
+  and compares it to the previous one, flagging a per-dimension move only when it
+  falls outside the previous 95% interval or crosses a threshold (noise is
+  reported as "stable"). `--label` tags a run, `--baseline` picks the run to
+  compare against, and `--fail-on-regression` exits non-zero on a regression.
+  `assevra history --history <file>` prints the trend across recorded runs.
+
 ## [0.2.0] — 2026-07-05
 
 ### Added

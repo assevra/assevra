@@ -207,6 +207,32 @@ by any key other than the one pinned — so a forger cannot substitute their own
 signature. The signature is **detached**: the scorecard files themselves are
 never modified, and the signature travels as a small `scorecard.sig.json`.
 
+## Track reliability over time
+
+A single scorecard is a snapshot. The regressions teams actually get burned by
+are the quiet ones — a model update drops grounding from 0.92 to 0.71 and no test
+notices. Pass `--history` and Assevra records each run and reports what changed —
+flagging a move only when it falls **outside the previous confidence interval** or
+crosses a threshold, so noise is not mistaken for a regression:
+
+```bash
+# Record each run and compare against the previous one:
+python -m assevra run --dataset your_agent.jsonl --history .assevra/history.jsonl --label v1.4
+
+# Fail CI if any dimension regressed vs the last run:
+python -m assevra run --dataset your_agent.jsonl --history .assevra/history.jsonl \
+    --label "$(git rev-parse --short HEAD)" --fail-on-regression
+
+# See the trend across recorded runs:
+python -m assevra history --history .assevra/history.jsonl
+```
+
+`--label` tags a run (a version or git SHA); `--baseline LABEL` compares against a
+specific earlier run instead of the immediately previous one. The history file is
+plain JSONL — commit it (or cache/restore it in CI) to keep the series across
+runs and machines. A regression prints a `Change since …` table and, with
+`--fail-on-regression`, exits non-zero.
+
 ## Troubleshooting
 
 - **`grounding` shows `SKIPPED`** — the LLM judge isn't configured. Run

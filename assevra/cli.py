@@ -142,9 +142,34 @@ def cmd_run(args: argparse.Namespace) -> int:
             f"--scorecard {json_path} --signature {sig_path}"
         )
 
-    if not args.gate:
-        return 0
-    return 0 if scorecard.overall_pass else 1
+    regressed = False
+    if args.history:
+        from . import history as history_mod
+
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        record = history_mod.record_from_scorecard(scorecard, args.label or "", now)
+        past = history_mod.load_history(args.history)
+        baseline = history_mod.find_baseline(past, args.baseline)
+        if baseline is not None:
+            deltas = history_mod.compare(baseline, record)
+            print()
+            print(history_mod.render_comparison(baseline, record, deltas))
+            regressed = history_mod.is_overall_regression(baseline, record, deltas)
+        else:
+            where = f"label {args.baseline!r}" if args.baseline else "empty history"
+            print(f"[assevra] history: no prior run to compare ({where}); recording baseline.")
+        history_mod.append_record(args.history, record)
+        label_note = f" (label: {args.label})" if args.label else ""
+        print(f"[assevra] appended this run to {args.history}{label_note}")
+
+    exit_code = 0
+    if args.gate and not scorecard.overall_pass:
+        exit_code = 1
+    if args.fail_on_regression and regressed:
+        if exit_code == 0:
+            print("[assevra] failing the build on regression (--fail-on-regression).")
+        exit_code = 1
+    return exit_code
 
 
 def cmd_keygen(args: argparse.Namespace) -> int:
@@ -269,6 +294,14 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_history(args: argparse.Namespace) -> int:
+    from . import history as history_mod
+
+    hist = history_mod.load_history(args.history)
+    print(history_mod.render_history(hist, limit=args.limit))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="assevra",
@@ -307,6 +340,27 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="KEYFILE",
         default=None,
         help="Ed25519 private key (PEM) to sign the scorecard; writes scorecard.sig.json",
+    )
+    run.add_argument(
+        "--history",
+        metavar="PATH",
+        default=None,
+        help="append this run to a JSONL history file and compare against the last run",
+    )
+    run.add_argument(
+        "--label",
+        default=None,
+        help="label for this run in history (e.g. a git SHA or version)",
+    )
+    run.add_argument(
+        "--baseline",
+        default=None,
+        help="compare against the most recent history run with this label (default: the previous run)",
+    )
+    run.add_argument(
+        "--fail-on-regression",
+        action="store_true",
+        help="exit non-zero if a dimension regressed (fell below its prior 95%% interval or now fails)",
     )
     run.set_defaults(func=cmd_run)
 
@@ -398,6 +452,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="pin the expected public key (a file path or the base64 string) to prove authorship",
     )
     verify.set_defaults(func=cmd_verify)
+
+    hist = sub.add_parser(
+        "history", help="show the reliability trend from a run-history file"
+    )
+    hist.add_argument("--history", required=True, help="path to the JSONL history file")
+    hist.add_argument(
+        "--limit", type=int, default=None, help="show only the last N runs"
+    )
+    hist.set_defaults(func=cmd_history)
 
     return parser
 
