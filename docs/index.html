@@ -42,6 +42,11 @@
     margin:0 0 18px}
   .prose p{margin:0 0 14px;max-width:680px}
   .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .diff h3{margin:0 0 6px;font-size:15.5px}
+  .diff p{margin:0;color:var(--muted);font-size:14px}
+  .diff .lead{font-weight:700;color:var(--accent);font-size:12px;text-transform:uppercase;
+    letter-spacing:.04em;display:block;margin-bottom:8px}
   .dim{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px}
   .dim h3{margin:0 0 6px;font-size:16px}
   .dim p{margin:0;color:var(--muted);font-size:14.5px}
@@ -57,7 +62,7 @@
   footer{border-top:1px solid var(--border);padding:28px 0 60px;color:var(--muted);
     font-size:14px}
   footer a{color:var(--accent)}
-  @media(max-width:640px){h1{font-size:32px}.grid{grid-template-columns:1fr}}
+  @media(max-width:640px){h1{font-size:32px}.grid,.grid3{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -74,15 +79,36 @@
 
     <header class="hero">
       <h1>Measure the reliability of your&nbsp;LLM&nbsp;agents.</h1>
-      <p class="lede">Assevra is an open-source toolkit and methodology that scores an
-        agent on four reliability dimensions &mdash; each against a fixed threshold,
-        with a confidence interval &mdash; and issues a signed reliability scorecard.</p>
+      <p class="lede"><strong>Not another eval dashboard.</strong> Assevra turns agent
+        outputs you have <em>already captured</em> into a portable reliability scorecard
+        &mdash; every number backed by a 95% confidence interval, runnable offline, ready
+        to gate your CI. One self-contained file you can commit, attach to a PR, or hand
+        to a reviewer. No account, no backend.</p>
       <div class="install"><span class="prompt">$</span> pip install assevra</div>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/assevra/assevra">View on GitHub</a>
         <a class="btn btn-ghost" href="example-scorecard.html">See an example scorecard</a>
       </div>
     </header>
+
+    <section>
+      <h2>What makes it different</h2>
+      <div class="grid3">
+        <div class="dim diff"><span class="lead">The artifact, not a dashboard</span>
+          <p>Most tools lock results behind a login. Assevra emits a self-contained
+            scorecard &mdash; Markdown, JSON, and styled HTML &mdash; you can version in
+            git, attach to a PR, or mail to a reviewer. Reproducible by anyone, no
+            account.</p></div>
+        <div class="dim diff"><span class="lead">Honest error bars</span>
+          <p>A bare &ldquo;0.92&rdquo; hides how few samples it came from. Every dimension
+            carries a 95% Wilson confidence interval, so nobody over-reads a small-sample
+            move &mdash; rigor the field is only starting to adopt.</p></div>
+        <div class="dim diff"><span class="lead">Offline &amp; deterministic-first</span>
+          <p>Rule-based scorers (PII, task-completion) need no API key and give the same
+            answer every run. The LLM-judge dimensions are optional and pinned.
+            Reproducibility is the default.</p></div>
+      </div>
+    </section>
 
     <section class="prose">
       <h2>Why</h2>

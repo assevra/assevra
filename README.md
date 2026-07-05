@@ -4,16 +4,40 @@
 [![PyPI](https://img.shields.io/pypi/v/assevra.svg)](https://pypi.org/project/assevra/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21200852.svg)](https://doi.org/10.5281/zenodo.21200852)
 
-*Assevra* — from *asseverate*, to solemnly attest. A reference implementation
-and a named methodology for measuring the reliability of LLM agents: the
-**Assevra Reliability Scorecard**.
+*Assevra* — from *asseverate*, to solemnly attest.
+
+**Not another eval dashboard.** Assevra turns agent outputs you have *already
+captured* into a portable **reliability scorecard** — every number backed by a
+95% confidence interval, runnable fully offline, and ready to gate your CI. The
+result is one self-contained file you can commit to git, attach to a pull
+request, or hand to a reviewer. No account, no backend, no login.
 
 This is a personal open-source research project by **Veera Ravindra Divi**. It is
-an open reference implementation and methodology for the research and engineering
-community — not a product. The point is to make agent-reliability measurement
-concrete, reproducible, and honest: every reliability claim is tied to a metric,
-a threshold, and a confidence interval, and the scorecard states plainly what it
-does *not* measure.
+an open reference implementation and named methodology for the research and
+engineering community — not a product. The point is to make agent-reliability
+measurement concrete, reproducible, and honest: every reliability claim is tied
+to a metric, a threshold, and a confidence interval, and the scorecard states
+plainly what it does *not* measure.
+
+## Why Assevra is different
+
+Most agent-eval tools give you a live dashboard behind a login and a bare score.
+Assevra makes three deliberately different choices:
+
+- **The scorecard is the deliverable — not a dashboard.** Assevra emits a
+  self-contained artifact (Markdown, JSON, and a styled HTML report with inline
+  CSS) that outlives any login: versionable in git, attachable to a PR, mailable
+  to an auditor, reproducible by anyone. The artifact *is* the shareable surface.
+  *(Roadmap: cryptographic signing, to make the scorecard tamper-evident —
+  verifiable evidence, not just a report.)*
+- **Every number carries honest error bars.** A bare "0.92" hides how few samples
+  it came from. Assevra reports a 95% **Wilson confidence interval** on every
+  dimension, so nobody over-reads a small-sample move — the discipline the field
+  is only starting to adopt.
+- **Offline and deterministic-first.** The rule-based scorers (PII,
+  task-completion) need no API key and return the same answer every run; the
+  LLM-judge dimensions are optional and pinned to a fixed model. Reproducibility
+  is the default, not an afterthought.
 
 ## The methodology in brief
 
