@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assevra — a reliability scorecard for LLM agents</title>
+<meta name="description" content="Assevra is an open-source toolkit and methodology for measuring the reliability of LLM agents: grounding, safety, PII, and task-completion, each scored against a fixed threshold with a confidence interval.">
+<style>
+  :root{
+    --ink:#1f2328;--muted:#5c6570;--border:#e2e6ea;--bg:#f6f8fa;--card:#fff;
+    --accent:#3a3f9e;--accent-ink:#2b2f78;
+    --pass:#1a7f37;--pass-bg:#e6f6ec;--fail:#cf222e;--skip:#6a7178;--skip-bg:#eef1f4;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:860px;margin:0 auto;padding:0 20px}
+  nav{display:flex;align-items:center;justify-content:space-between;
+    padding:20px 0;border-bottom:1px solid var(--border)}
+  .brand{font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+    font-size:14px;color:var(--accent)}
+  nav .links a{margin-left:20px;font-size:14px;color:var(--muted)}
+  header.hero{padding:64px 0 40px;text-align:center}
+  h1{font-size:40px;line-height:1.15;margin:0 0 14px;letter-spacing:-.02em}
+  .lede{font-size:19px;color:var(--muted);max-width:620px;margin:0 auto 28px}
+  .install{display:inline-flex;align-items:center;gap:10px;background:#0d1117;color:#e6edf3;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;
+    padding:12px 18px;border-radius:10px}
+  .install .prompt{color:#7d8590}
+  .cta{margin-top:24px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .btn{display:inline-block;padding:11px 20px;border-radius:9px;font-weight:600;font-size:15px}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:hover{background:var(--accent-ink);text-decoration:none}
+  .btn-ghost{border:1px solid var(--border);background:var(--card);color:var(--ink)}
+  .btn-ghost:hover{text-decoration:none;border-color:#c2c9d0}
+  section{padding:36px 0}
+  h2{font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+    margin:0 0 18px}
+  .prose p{margin:0 0 14px;max-width:680px}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  .dim{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px}
+  .dim h3{margin:0 0 6px;font-size:16px}
+  .dim p{margin:0;color:var(--muted);font-size:14.5px}
+  .tag{display:inline-block;font-size:11px;font-weight:600;text-transform:uppercase;
+    letter-spacing:.04em;padding:2px 8px;border-radius:20px;margin-bottom:8px;
+    background:var(--skip-bg);color:var(--skip)}
+  .tag.judge{background:#eef0fb;color:var(--accent)}
+  .tag.det{background:var(--pass-bg);color:var(--pass)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;
+    padding:22px 24px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13.5px;
+    background:var(--skip-bg);padding:2px 6px;border-radius:5px}
+  footer{border-top:1px solid var(--border);padding:28px 0 60px;color:var(--muted);
+    font-size:14px}
+  footer a{color:var(--accent)}
+  @media(max-width:640px){h1{font-size:32px}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <nav>
+      <span class="brand">Assevra</span>
+      <span class="links">
+        <a href="https://github.com/assevra/assevra">GitHub</a>
+        <a href="https://pypi.org/project/assevra/">PyPI</a>
+        <a href="https://github.com/assevra/assevra/blob/main/METHODOLOGY.md">Methodology</a>
+        <a href="example-scorecard.html">Example</a>
+      </span>
+    </nav>
+
+    <header class="hero">
+      <h1>Measure the reliability of your&nbsp;LLM&nbsp;agents.</h1>
+      <p class="lede">Assevra is an open-source toolkit and methodology that scores an
+        agent on four reliability dimensions &mdash; each against a fixed threshold,
+        with a confidence interval &mdash; and issues a signed reliability scorecard.</p>
+      <div class="install"><span class="prompt">$</span> pip install assevra</div>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/assevra/assevra">View on GitHub</a>
+        <a class="btn btn-ghost" href="example-scorecard.html">See an example scorecard</a>
+      </div>
+    </header>
+
+    <section class="prose">
+      <h2>Why</h2>
+      <p>LLM agents fail quietly. They answer a question they should refuse, echo a
+        record they should redact, or call a tool twice and no test catches it. A
+        dashboard of averages hides these; a pass/fail gate against a labeled dataset
+        does not. Assevra turns "the agent seems fine" into a number you can defend,
+        with the sample size and interval attached so nobody over-reads a small run.</p>
+    </section>
+
+    <section>
+      <h2>Four dimensions</h2>
+      <div class="grid">
+        <div class="dim"><span class="tag judge">llm-judge</span>
+          <h3>Grounding</h3>
+          <p>Does the answer follow from the provided context, or is it invented?</p></div>
+        <div class="dim"><span class="tag judge">llm-judge</span>
+          <h3>Safety / refusal</h3>
+          <p>Does the agent refuse what it must refuse, and answer what it should?</p></div>
+        <div class="dim"><span class="tag det">deterministic</span>
+          <h3>PII leak</h3>
+          <p>Does sensitive data escape into an output? Zero tolerance on hard entities.</p></div>
+        <div class="dim"><span class="tag det">deterministic</span>
+          <h3>Task completion</h3>
+          <p>Did the agent actually do what was asked, end to end?</p></div>
+      </div>
+    </section>
+
+    <section class="prose">
+      <h2>How it works</h2>
+      <p>Point Assevra at a JSONL dataset of labeled cases. It routes each row to its
+        dimension's scorer, aggregates the results into a scorecard with per-dimension
+        pass rates and 95% Wilson intervals, and writes the report as Markdown, JSON,
+        and a self-contained HTML file. The deterministic dimensions run offline; the
+        judge dimensions use a pinned Claude model and are <em>skipped, not failed</em>,
+        when no key is set. Add <code>--gate</code> and it exits non-zero on failure, so
+        it gates a pull request directly instead of a dashboard nobody opens.</p>
+    </section>
+
+    <section>
+      <h2>Cite</h2>
+      <div class="card">
+        Divi, Veera Ravindra. <em>Assevra: A Reliability Scorecard for LLM Agents</em>,
+        v0.1, 2026. <a href="https://github.com/assevra/assevra">github.com/assevra/assevra</a>
+      </div>
+    </section>
+
+    <footer>
+      Assevra is a personal open-source research project, MIT-licensed, maintained by
+      Veera Ravindra Divi. &middot;
+      <a href="https://github.com/assevra/assevra">GitHub</a> &middot;
+      <a href="https://pypi.org/project/assevra/">PyPI</a>
+    </footer>
+  </div>
+</body>
+</html>
