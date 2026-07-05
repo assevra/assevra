@@ -21,6 +21,7 @@ import os
 import sys
 from pathlib import Path
 
+from . import bootstrap as bootstrap_mod
 from .judge import DEFAULT_JUDGE_MODEL, get_judge
 from .scorecard import ASSEVRA_DOI, Scorecard
 from .scorers import grounding, pii, safety, task_completion
@@ -123,6 +124,41 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0 if scorecard.overall_pass else 1
 
 
+def cmd_bootstrap(args: argparse.Namespace) -> int:
+    if not Path(args.source).is_file():
+        raise SystemExit(f"source not found: {args.source}")
+
+    try:
+        rows, resolved = bootstrap_mod.bootstrap(
+            args.source,
+            fmt=args.format,
+            dimension=args.dimension,
+            limit=args.limit,
+            id_prefix=args.id_prefix,
+            input_field=args.input_field,
+            output_field=args.output_field,
+            context_field=args.context_field,
+        )
+    except bootstrap_mod.BootstrapError as exc:
+        raise SystemExit(f"[assevra] bootstrap: {exc}")
+
+    bootstrap_mod.write_dataset(rows, args.out)
+
+    hint = bootstrap_mod._DIMENSION_TEMPLATE[args.dimension]["hint"]
+    print(
+        f"[assevra] drafted {len(rows)} rows from {args.source} "
+        f"(format: {resolved}) -> {args.out}"
+    )
+    print(f"[assevra] every row is dimension={args.dimension!r}, tagged needs-review.")
+    print(f"[assevra] next: label the answer key on each row. {hint}")
+    print(
+        "[assevra] rows for other dimensions? re-tag their `dimension` field and "
+        "fill that dimension's label."
+    )
+    print(f"[assevra] then score it:  python -m assevra run --dataset {args.out}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="assevra",
@@ -157,6 +193,53 @@ def build_parser() -> argparse.ArgumentParser:
         help="exit non-zero if the scorecard fails (for CI gating)",
     )
     run.set_defaults(func=cmd_run)
+
+    boot = sub.add_parser(
+        "bootstrap",
+        help="draft a dataset from captured traces (removes the blank-page JSONL step)",
+    )
+    boot.add_argument(
+        "--from",
+        dest="source",
+        required=True,
+        help="file of captured interactions (JSONL, JSON array, or OTLP export)",
+    )
+    boot.add_argument(
+        "--out",
+        default="drafted.jsonl",
+        help="path to write the drafted dataset (default: drafted.jsonl)",
+    )
+    boot.add_argument(
+        "--format",
+        choices=["auto", "generic", "openai", "otel"],
+        default="auto",
+        help="input format (default: auto-detect)",
+    )
+    boot.add_argument(
+        "--dimension",
+        choices=sorted(bootstrap_mod._DIMENSION_TEMPLATE),
+        default=bootstrap_mod.DEFAULT_DIMENSION,
+        help=(
+            "dimension to assign drafted rows "
+            f"(default: {bootstrap_mod.DEFAULT_DIMENSION}); re-tag per row as needed"
+        ),
+    )
+    boot.add_argument(
+        "--limit", type=int, default=None, help="cap the number of drafted rows"
+    )
+    boot.add_argument(
+        "--id-prefix", default="bootstrap", help="id prefix for drafted rows"
+    )
+    boot.add_argument(
+        "--input-field", default=None, help="generic format: field holding the user input"
+    )
+    boot.add_argument(
+        "--output-field", default=None, help="generic format: field holding the agent output"
+    )
+    boot.add_argument(
+        "--context-field", default=None, help="generic format: field holding the context"
+    )
+    boot.set_defaults(func=cmd_bootstrap)
     return parser
 
 

@@ -117,6 +117,31 @@ captured. The workflow is three steps:
    with its dimension and the expected behavior (the answer key).
 3. **Score.** `python -m assevra run --dataset your_agent.jsonl`
 
+### Fastest start: bootstrap from your traces
+
+You do not have to write that JSONL from a blank page. If you already have logged
+interactions — raw traces, OpenAI chat logs, or OpenTelemetry spans from Langfuse,
+Phoenix, Arize, or any OTel exporter — `assevra bootstrap` drafts the dataset for
+you, filling in the *captured* fields (`input`, `agent_output`, `context`) so you
+only supply the answer key:
+
+```bash
+# Draft a dataset from captured interactions (auto-detects the format):
+python -m assevra bootstrap --from traces.jsonl --out drafted.jsonl
+
+# OpenAI chat logs, scored for safety; OTel spans, scored for grounding:
+python -m assevra bootstrap --from openai_logs.jsonl --format openai --dimension safety
+python -m assevra bootstrap --from spans.json      --format otel   --dimension grounding
+```
+
+Each drafted row arrives tagged `needs-review` with a one-line `_review` hint
+telling you exactly what to fill (the `must_include` facts, the `should_refuse`
+flag, the sanctioned field). The draft is **runnable immediately** — `assevra run`
+on it shows you the report shape at once; unlabeled rows honestly surface as
+"nothing to verify" until you complete the answer key. For a generic file with
+non-standard field names, map them explicitly with `--input-field` /
+`--output-field` / `--context-field`.
+
 ### Dataset format
 
 One JSON object per line. Fields:
