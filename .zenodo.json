@@ -1,0 +1,21 @@
+{
+  "title": "Assevra: A Reliability Scorecard for LLM Agents",
+  "description": "Assevra is an open-source toolkit and methodology for measuring the reliability of large language model (LLM) agents. It scores an agent on four dimensions - grounding, safety/refusal, PII leakage, and task completion - each against a fixed threshold with a 95% Wilson confidence interval, and issues a reproducible reliability scorecard as Markdown, JSON, and a self-contained HTML report. Deterministic dimensions run offline; LLM-as-a-judge dimensions use a pinned model and are skipped, not failed, when unavailable. This is the reference implementation of the Assevra Reliability Scorecard methodology.",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "MIT",
+  "creators": [
+    { "name": "Divi, Veera Ravindra" }
+  ],
+  "keywords": [
+    "large language models",
+    "LLM agents",
+    "AI reliability",
+    "agent evaluation",
+    "LLM-as-a-judge",
+    "benchmark",
+    "PII detection",
+    "AI safety",
+    "software engineering"
+  ]
+}
