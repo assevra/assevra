@@ -14,7 +14,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from assevra import history as h  # noqa: E402
 
 
-def _dim(name, score, lo, hi, passed, threshold=0.9, skipped=False, n=10):
+def _rows(pattern):
+    return [{"id": f"r{i}", "passed": passed} for i, passed in enumerate(pattern, start=1)]
+
+
+def _dim(name, score, lo, hi, passed, threshold=0.9, skipped=False, n=10, rows=None):
     return {
         "name": name,
         "skipped": skipped,
@@ -25,6 +29,7 @@ def _dim(name, score, lo, hi, passed, threshold=0.9, skipped=False, n=10):
         "passes": round(score * n),
         "threshold": threshold,
         "passed": passed,
+        "rows": rows if rows is not None else [],
     }
 
 
@@ -68,6 +73,50 @@ def test_threshold_crossing_dominates():
     prev2 = _rec(False, [_dim("t", 0.80, 0.60, 0.92, False, threshold=0.90)])
     curr2 = _rec(True, [_dim("t", 0.95, 0.85, 0.99, True, threshold=0.90)])
     assert h.compare(prev2, curr2)[0].status == "now passing"
+
+
+def test_mcnemar_exact_binomial_for_paired_improvement():
+    prev_rows = _rows([False] * 10)
+    curr_rows = _rows([True] * 10)
+    prev = _rec(False, [_dim("g", 0.0, 0.0, 0.3, False, rows=prev_rows)])
+    curr = _rec(True, [_dim("g", 1.0, 0.7, 1.0, True, rows=curr_rows)])
+
+    d = h.compare(prev, curr)[0]
+
+    assert d.mcnemar_n == 10
+    assert round(d.mcnemar_p, 4) == 0.002
+    assert d.mcnemar_significant
+
+
+def test_mcnemar_identical_paired_runs_are_not_significant():
+    rows = _rows([True, False, True, False])
+    prev = _rec(True, [_dim("g", 0.5, 0.2, 0.8, True, rows=rows)])
+    curr = _rec(True, [_dim("g", 0.5, 0.2, 0.8, True, rows=rows)])
+
+    d = h.compare(prev, curr)[0]
+
+    assert d.mcnemar_n == 0
+    assert d.mcnemar_p == 1.0
+    assert not d.mcnemar_significant
+
+
+def test_mcnemar_omitted_when_row_ids_do_not_match():
+    prev = _rec(True, [_dim("g", 0.5, 0.2, 0.8, True, rows=_rows([True, False]))])
+    curr = _rec(True, [
+        _dim(
+            "g",
+            0.5,
+            0.2,
+            0.8,
+            True,
+            rows=[{"id": "other", "passed": True}, {"id": "r2", "passed": False}],
+        )
+    ])
+
+    d = h.compare(prev, curr)[0]
+
+    assert d.mcnemar_p is None
+    assert d.mcnemar_n == 0
 
 
 def test_new_and_skipped_dimensions():
