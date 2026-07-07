@@ -14,7 +14,7 @@ them as empty placeholders with a one-line `_review` hint telling you exactly
 what to fill for each row. You label the ambiguous part; you do not transcribe
 the boring part.
 
-Three input shapes are understood out of the box, all dependency-free:
+Four input shapes are understood out of the box, all dependency-free:
 
   * ``generic``  -- JSONL where each line is one interaction. Field names are
                     detected from common aliases (prompt/question/query for input,
@@ -22,6 +22,8 @@ Three input shapes are understood out of the box, all dependency-free:
                     with ``--input-field`` / ``--output-field`` / ``--context-field``.
   * ``openai``   -- OpenAI chat-completions logs (a ``messages`` list and/or a
                     ``choices`` response), including ``{request, response}`` pairs.
+  * ``anthropic`` -- Anthropic Messages API logs (user/assistant messages,
+                    optionally a ``model`` field like ``claude-*``).
   * ``otel``     -- OpenTelemetry / OpenInference spans (``input.value`` /
                     ``output.value``) and OpenLLMetry spans
                     (``gen_ai.prompt.*`` / ``gen_ai.completion.*``), whether
@@ -146,9 +148,25 @@ def _looks_like_openai(records: list[Any]) -> bool:
     return False
 
 
+def _looks_like_anthropic(records: list[Any]) -> bool:
+    for rec in records[:5]:
+        if not isinstance(rec, dict):
+            continue
+        if isinstance(rec.get("model"), str) and rec["model"].startswith("claude-"):
+            return True
+        messages = rec.get("messages")
+        if isinstance(messages, list):
+            for msg in messages:
+                if isinstance(msg, dict) and msg.get("role") == "assistant" and isinstance(msg.get("content"), list):
+                    return True
+    return False
+
+
 def detect_format(records: list[Any]) -> str:
     if _looks_like_otel(records):
         return "otel"
+    if _looks_like_anthropic(records):
+        return "anthropic"
     if _looks_like_openai(records):
         return "openai"
     return "generic"
@@ -212,6 +230,20 @@ def _extract_openai(rec: dict) -> Optional[dict]:
     if out is None and isinstance(messages, list):
         out = _messages_content(messages, "assistant")
 
+    if not inp and not out:
+        return None
+    return {"input": _as_text(inp), "agent_output": _as_text(out), "context": _as_text(ctx)}
+
+
+def _extract_anthropic(rec: dict) -> Optional[dict]:
+    messages = rec.get("messages") if isinstance(rec, dict) else None
+    if not isinstance(messages, list):
+        return None
+    inp = _messages_content(messages, "user")
+    out = _messages_content(messages, "assistant")
+    ctx = _messages_content(messages, "system")
+    if not ctx and isinstance(rec.get("system"), str):
+        ctx = rec["system"]
     if not inp and not out:
         return None
     return {"input": _as_text(inp), "agent_output": _as_text(out), "context": _as_text(ctx)}
@@ -346,9 +378,9 @@ def bootstrap(
 
     records = _load_records(source_path)
     resolved = detect_format(records) if fmt == "auto" else fmt
-    if resolved not in ("generic", "openai", "otel"):
+    if resolved not in ("generic", "openai", "anthropic", "otel"):
         raise BootstrapError(
-            f"unknown format {resolved!r}; expected generic, openai, or otel"
+            f"unknown format {resolved!r}; expected generic, openai, anthropic, or otel"
         )
 
     interactions: list[dict] = []
@@ -360,6 +392,11 @@ def bootstrap(
     elif resolved == "openai":
         for rec in records:
             got = _extract_openai(rec) if isinstance(rec, dict) else None
+            if got:
+                interactions.append(got)
+    elif resolved == "anthropic":
+        for rec in records:
+            got = _extract_anthropic(rec) if isinstance(rec, dict) else None
             if got:
                 interactions.append(got)
     else:  # generic

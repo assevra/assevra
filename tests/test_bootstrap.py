@@ -121,6 +121,56 @@ def test_otel_openinference_and_openllmetry():
         assert "must_include" not in rows[0] and "should_refuse" not in rows[0]
 
 
+def test_anthropic_messages_format():
+    with tempfile.TemporaryDirectory() as tmp:
+        src = _write(
+            tmp,
+            "a.jsonl",
+            json.dumps(
+                {
+                    "model": "claude-sonnet-4-20250514",
+                    "messages": [
+                        {"role": "user", "content": [{"type": "text", "text": "hello claude"}]},
+                        {"role": "assistant", "content": [{"type": "text", "text": "hi user"}]},
+                    ],
+                }
+            )
+            + "\n"
+            + json.dumps(
+                {
+                    "messages": [
+                        {"role": "system", "content": "sys ctx"},
+                        {"role": "user", "content": "plain text input"},
+                        {"role": "assistant", "content": "plain text output"},
+                    ],
+                }
+            )
+            + "\n"
+            + json.dumps(
+                {
+                    "messages": [
+                        {"role": "user", "content": "top-level system"},
+                        {"role": "assistant", "content": "output"},
+                    ],
+                    "system": "real anthropic api system prompt",
+                }
+            )
+            + "\n",
+        )
+        rows, fmt = bs.bootstrap(src)
+        assert fmt == "anthropic"
+        assert len(rows) == 3
+        assert rows[0]["input"] == "hello claude"
+        assert rows[0]["agent_output"] == "hi user"
+        assert rows[0]["context"] == ""
+        assert rows[1]["input"] == "plain text input"
+        assert rows[1]["agent_output"] == "plain text output"
+        assert rows[1]["context"] == "sys ctx"
+        assert rows[2]["input"] == "top-level system"
+        assert rows[2]["agent_output"] == "output"
+        assert rows[2]["context"] == "real anthropic api system prompt"
+
+
 def test_limit_and_id_prefix():
     with tempfile.TemporaryDirectory() as tmp:
         src = _write(tmp, "g.jsonl", "".join(f'{{"input":"i{i}","output":"o{i}"}}\n' for i in range(5)))
