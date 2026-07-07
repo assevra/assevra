@@ -145,17 +145,30 @@ def test_anthropic_messages_format():
                     ],
                 }
             )
+            + "\n"
+            + json.dumps(
+                {
+                    "messages": [
+                        {"role": "user", "content": "top-level system"},
+                        {"role": "assistant", "content": "output"},
+                    ],
+                    "system": "real anthropic api system prompt",
+                }
+            )
             + "\n",
         )
         rows, fmt = bs.bootstrap(src)
         assert fmt == "anthropic"
-        assert len(rows) == 2
+        assert len(rows) == 3
         assert rows[0]["input"] == "hello claude"
         assert rows[0]["agent_output"] == "hi user"
         assert rows[0]["context"] == ""
         assert rows[1]["input"] == "plain text input"
         assert rows[1]["agent_output"] == "plain text output"
         assert rows[1]["context"] == "sys ctx"
+        assert rows[2]["input"] == "top-level system"
+        assert rows[2]["agent_output"] == "output"
+        assert rows[2]["context"] == "real anthropic api system prompt"
 
 
 def test_limit_and_id_prefix():

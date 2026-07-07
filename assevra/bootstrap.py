@@ -242,6 +242,8 @@ def _extract_anthropic(rec: dict) -> Optional[dict]:
     inp = _messages_content(messages, "user")
     out = _messages_content(messages, "assistant")
     ctx = _messages_content(messages, "system")
+    if not ctx and isinstance(rec.get("system"), str):
+        ctx = rec["system"]
     if not inp and not out:
         return None
     return {"input": _as_text(inp), "agent_output": _as_text(out), "context": _as_text(ctx)}
