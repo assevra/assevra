@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/assevra.svg)](https://pypi.org/project/assevra/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21200852.svg)](https://doi.org/10.5281/zenodo.21200852)
+[![GitHub stars](https://img.shields.io/github/stars/assevra/assevra?style=social)](https://github.com/assevra/assevra/stargazers)
 
 *Assevra* — from *asseverate*, to solemnly attest.
 
@@ -11,6 +12,8 @@ captured* into a portable **reliability scorecard** — every number backed by a
 95% confidence interval, runnable fully offline, and ready to gate your CI. The
 result is one self-contained file you can commit to git, attach to a pull
 request, or hand to a reviewer. No account, no backend, no login.
+
+> ⭐ If Assevra is useful to you, a star helps other engineers find it — and helps the methodology reach the people whose agents most need it.
 
 This is a personal open-source research project by **Veera Ravindra Divi**. It is
 an open reference implementation and named methodology for the research and
