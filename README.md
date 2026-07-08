@@ -1,11 +1,30 @@
+<div align="center">
+
+<img src="docs/assets/hero.png" alt="Assevra — the reliability scorecard for LLM agents" width="860">
+
 # Assevra
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/assevra.svg)](https://pypi.org/project/assevra/)
+### The reliability scorecard for LLM agents
+
+*From* **asseverate** — *to solemnly attest.*
+
+[![PyPI](https://img.shields.io/pypi/v/assevra?color=1f6feb&label=pypi)](https://pypi.org/project/assevra/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://pypi.org/project/assevra/)
+[![CI](https://github.com/assevra/assevra/actions/workflows/eval-gate.yml/badge.svg)](https://github.com/assevra/assevra/actions/workflows/eval-gate.yml)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21200852.svg)](https://doi.org/10.5281/zenodo.21200852)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/assevra/assevra?style=social)](https://github.com/assevra/assevra/stargazers)
 
-*Assevra* — from *asseverate*, to solemnly attest.
+![runs offline](https://img.shields.io/badge/runs-fully%20offline-0aa)
+![deterministic-first](https://img.shields.io/badge/scoring-deterministic--first-brightgreen)
+![signed](https://img.shields.io/badge/scorecards-Ed25519%20signed-6f42c1)
+![every number 95% CI](https://img.shields.io/badge/every%20number-95%25%20CI-8A2BE2)
+
+**[Website](https://assevra.ai)** · **[Live example scorecard](https://assevra.ai/example-scorecard.html)** · **[Methodology](METHODOLOGY.md)** · **[Cite](https://doi.org/10.5281/zenodo.21200852)**
+
+<a href="https://assevra.ai/example-scorecard.html"><img src="docs/assets/scorecard.png" alt="An Assevra reliability scorecard: a gradient header with a PASS verdict, a stat strip showing 4/4 dimensions passed over 114 rows, a summary table with 95% confidence intervals per dimension, and a per-dimension confidence-interval bar with pass/fail rows." width="860"></a>
+
+</div>
 
 **Not another eval dashboard.** Assevra turns agent outputs you have *already
 captured* into a portable **reliability scorecard** — every number backed by a
@@ -22,7 +41,7 @@ measurement concrete, reproducible, and honest: every reliability claim is tied
 to a metric, a threshold, and a confidence interval, and the scorecard states
 plainly what it does *not* measure.
 
-## Why Assevra is different
+## ✨ Why Assevra is different
 
 Most agent-eval tools give you a live dashboard behind a login and a bare score.
 Assevra makes three deliberately different choices:
@@ -43,7 +62,7 @@ Assevra makes three deliberately different choices:
   LLM-judge dimensions are optional and pinned to a fixed model. Reproducibility
   is the default, not an afterthought.
 
-## The methodology in brief
+## 📐 The methodology in brief
 
 An agent's reliability is reported across four independent dimensions, each
 scored on a labeled dataset:
@@ -64,7 +83,7 @@ and **report the interval, not just the mean** (every dimension carries a 95%
 Wilson interval so nobody over-reads a small-sample move). The full specification
 is in [METHODOLOGY.md](METHODOLOGY.md).
 
-## Install
+## 📦 Install
 
 Requires Python 3.10+. The deterministic core (task-completion, the PII regex
 fallback, the scorecard, and the CLI) has **no third-party dependencies**, so it
@@ -94,7 +113,7 @@ The default judge is Anthropic Claude (`claude-opus-4-8` for highest agreement,
 failed**, when no API key is set — so the scorecard still runs offline on the
 deterministic dimensions.
 
-## 60-second quickstart
+## ⚡ 60-second quickstart
 
 The bundled example dataset lives in the repo, so clone it to try the tool on
 known-good data:
@@ -113,7 +132,7 @@ the safety heuristic, and skips grounding; set `ANTHROPIC_API_KEY` to enable the
 judge dimensions. Add `--gate` to make the command exit non-zero when the
 scorecard fails, so it can gate CI directly.
 
-## Gate your CI
+## 🚦 Gate your CI
 
 Want your own repo's CI to fail when your agent regresses — the way this repo
 gates itself? Copy [`examples/ci-gate.yml`](examples/ci-gate.yml) into your
@@ -129,7 +148,7 @@ The deterministic dimensions (PII, task-completion) run with no API key; set an
 safety). The example uploads `scorecard.html` as a build artifact so you can open
 the report from any run.
 
-## Evaluate your own agent
+## 🧪 Evaluate your own agent
 
 Assevra **does not run your agent** — it scores outputs you have already
 captured. The workflow is three steps:
@@ -143,10 +162,10 @@ captured. The workflow is three steps:
 ### Fastest start: bootstrap from your traces
 
 You do not have to write that JSONL from a blank page. If you already have logged
-interactions — raw traces, OpenAI chat logs, or OpenTelemetry spans from Langfuse,
-Phoenix, Arize, or any OTel exporter — `assevra bootstrap` drafts the dataset for
-you, filling in the *captured* fields (`input`, `agent_output`, `context`) so you
-only supply the answer key:
+interactions — raw traces, OpenAI chat logs, Anthropic Messages, or OpenTelemetry
+spans from Langfuse, Phoenix, Arize, or any OTel exporter — `assevra bootstrap`
+drafts the dataset for you, filling in the *captured* fields (`input`,
+`agent_output`, `context`) so you only supply the answer key:
 
 ```bash
 # Draft a dataset from captured interactions (auto-detects the format):
@@ -195,7 +214,7 @@ Save that as `my_agent.jsonl` and run `python -m assevra run --dataset my_agent.
 See [`datasets/golden.jsonl`](datasets/golden.jsonl) for more worked rows and
 [METHODOLOGY.md](METHODOLOGY.md) for the full per-dimension specification.
 
-## Sign a scorecard — tamper-evident evidence
+## 🔏 Sign a scorecard — tamper-evident evidence
 
 A shared HTML file is convenient, but it is not *evidence*: anyone can edit it.
 Assevra can attach a detached **Ed25519 signature** so a reviewer can confirm a
@@ -227,7 +246,7 @@ by any key other than the one pinned — so a forger cannot substitute their own
 signature. The signature is **detached**: the scorecard files themselves are
 never modified, and the signature travels as a small `scorecard.sig.json`.
 
-## Measure pass^k and consistency (reliability, not just accuracy)
+## 🎯 Measure pass^k and consistency (reliability, not just accuracy)
 
 A pass rate answers "how often does it work?" A deployed agent needs the stricter
 answer: "does it work *every* time?" Run your agent on the same input several
@@ -255,7 +274,7 @@ JSON, and HTML) with per-dimension consistency, pass^k, and the list of flaky
 cases. On a single-trial dataset there is nothing to group, so the section is
 simply omitted — existing scorecards are unchanged.
 
-## Trustworthy judging: panels and calibration
+## ⚖️ Trustworthy judging: panels and calibration
 
 An LLM judge is only as good as its agreement with humans, and a single judge can
 be biased or flaky. Assevra addresses both.
@@ -284,7 +303,7 @@ and sensitivity/specificity, per dimension and overall. The bar is **κ ≥ 0.85
 below it, the judge score is not yet trustworthy. `calibrate` exits non-zero when
 the judge is below the bar, so you can gate a judge you intend to rely on.
 
-## Track reliability over time
+## 📈 Track reliability over time
 
 A single scorecard is a snapshot. The regressions teams actually get burned by
 are the quiet ones — a model update drops grounding from 0.92 to 0.71 and no test
@@ -310,7 +329,7 @@ plain JSONL — commit it (or cache/restore it in CI) to keep the series across
 runs and machines. A regression prints a `Change since …` table and, with
 `--fail-on-regression`, exits non-zero.
 
-## Map to governance frameworks — the Agent Card
+## 🏛️ Map to governance frameworks — the Agent Card
 
 Regulated-vertical buyers ask "prove the agent is safe," and their security review
 speaks in control frameworks, not eval metrics. `assevra attest` bridges the two:
@@ -331,13 +350,14 @@ legal advice.** Every framework requires substantially more than these
 measurements; the mappings are indicative and must be checked against the current
 text of each framework and your auditor's requirements.
 
-## Troubleshooting
+## 🛠️ Troubleshooting
 
 - **`grounding` shows `SKIPPED`** — the LLM judge isn't configured. Run
   `pip install "assevra[judge]"` and `export ANTHROPIC_API_KEY=...`.
-- **PII note says `engine=regex-fallback`** — only hard-block entities (SSN,
-  credit card, bank number) are detected. Install `pip install "assevra[pii]"`
-  and `python -m spacy download en_core_web_lg` for the full detector.
+- **PII note says `engine=regex-fallback`** — only the floor entities (SSN, credit
+  card, bank number, IBAN, passport, phone) are detected. Install
+  `pip install "assevra[pii]"` and `python -m spacy download en_core_web_lg` for
+  the full detector.
 - **`unknown dimension` error** — every row's `dimension` must be one of
   `grounding`, `safety`, `pii`, `task_completion`.
 - **A dimension you expected is missing from the report** — it only appears if
@@ -348,10 +368,18 @@ text of each framework and your auditor's requirements.
   what was signed (even a whitespace-only re-save is fine; only the *content*
   matters). Re-sign, or verify the exact file that was signed.
 
-## An example scorecard
+## 📊 An example scorecard
 
-Running the quickstart offline produces output like this (deterministic
-dimensions pass; grounding is skipped without a judge):
+See a full, rendered report live: **[assevra.ai/example-scorecard.html](https://assevra.ai/example-scorecard.html)**
+— a four-dimension audit with a PASS verdict, per-dimension confidence-interval
+bars, failing rows called out first, and a pass^k reliability section.
+
+<div align="center">
+<a href="https://assevra.ai/example-scorecard.html"><img src="docs/assets/scorecard-full.png" alt="Full Assevra reliability scorecard showing grounding, safety, PII, and task-completion dimensions, each with a score, 95% confidence interval, threshold, and per-row detail, plus a reliability-across-repeated-trials section." width="640"></a>
+</div>
+
+Running the quickstart offline (no judge) produces the Markdown form — deterministic
+dimensions pass; grounding is skipped without a judge:
 
 ```
 | Dimension       | Mode          | Score | 95% CI      | n | Threshold | Result  |
@@ -362,14 +390,10 @@ dimensions pass; grounding is skipped without a judge):
 | task_completion | deterministic | 1.000 | 0.510–1.000 | 4 |   0.90    | PASS    |
 ```
 
-For a fuller, worked example that reads like a real audit — with two of the four
-dimensions failing — see
-[examples/sample-scorecard.md](examples/sample-scorecard.md). For the rendered
-HTML report, see
-[examples/example-scorecard.html](examples/example-scorecard.html) (open it in a
-browser).
+For a fuller worked example in Markdown — with two of the four dimensions failing
+— see [examples/sample-scorecard.md](examples/sample-scorecard.md).
 
-## Honest scope
+## 🔍 Honest scope
 
 - **This is a reference implementation, not a certification.** A pass means the
   agent behaved on the dataset you gave it, not that it is safe.
@@ -388,7 +412,7 @@ browser).
 The point of stating this here is that reliability claims are only as strong as
 what they honestly exclude.
 
-## Who's using Assevra?
+## 🤝 Who's using Assevra?
 
 Assevra is new. If you're using it to evaluate, gate, or audit an agent — in
 research, in CI, or in a security review — I'd genuinely like to know. Open a PR
@@ -398,7 +422,7 @@ real failure modes are what sharpen the methodology.
 
 <!-- Add yourself:  - **Your project / org** — one line on how you use Assevra. -->
 
-## Good first issues
+## 🌱 Good first issues
 
 New here and want to contribute? The
 [`good first issue`](https://github.com/assevra/assevra/labels/good%20first%20issue)
@@ -406,7 +430,7 @@ label collects small, self-contained tasks — a new PII pattern, a trace adapte
 a CI-gating example — each with a pointer to the file to change and how to test
 it. See [CONTRIBUTING.md](CONTRIBUTING.md) for the ground rules.
 
-## How to cite
+## 📚 How to cite
 
 > Divi, Veera Ravindra. *Assevra: A Reliability Scorecard for LLM Agents*, v0.3,
 > 2026. https://doi.org/10.5281/zenodo.21200852
@@ -418,7 +442,7 @@ concept DOI — always resolves to the latest version). A
 repository" button from it. When you report a number, say it was *measured with
 Assevra v0.3*.
 
-## License & contributing
+## 📄 License & contributing
 
 MIT — see [LICENSE](LICENSE). Contributions are welcome; see
 [CONTRIBUTING.md](CONTRIBUTING.md). Every scorer must ship with a definition, a
