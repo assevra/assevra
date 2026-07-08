@@ -502,7 +502,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--from",
         dest="source",
         required=True,
-        help="file of captured interactions (JSONL, JSON array, or OTLP export)",
+        help="file of captured interactions (JSONL, JSON array, OTLP export, or CSV)",
     )
     boot.add_argument(
         "--out",
@@ -511,7 +511,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     boot.add_argument(
         "--format",
-        choices=["auto", "generic", "openai", "otel"],
+        choices=["auto", "generic", "csv", "openai", "anthropic", "otel"],
         default="auto",
         help="input format (default: auto-detect)",
     )
