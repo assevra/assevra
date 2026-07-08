@@ -1,0 +1,61 @@
+# Gate your CI on an Assevra scorecard.
+#
+# Drop this file into `.github/workflows/` of your own repo and point
+# `--dataset` at your labeled dataset. The build fails whenever your agent's
+# scorecard drops below its thresholds, so a regression can't merge.
+#
+# What runs, and when:
+#   - Deterministic dimensions (PII, task-completion) always run -- no API key.
+#   - LLM-as-judge dimensions (grounding, safety) run only if you provide an
+#     ANTHROPIC_API_KEY secret; without it they are skipped, not failed, so this
+#     still works on forks and key-less repos.
+
+name: assevra-gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  assevra-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Assevra
+        run: |
+          python -m pip install --upgrade pip
+          # Core is enough for the deterministic gate. For the full PII detector
+          # (Microsoft Presidio), use:  pip install "assevra[pii]"
+          pip install assevra
+
+      # Uncomment to enable the LLM-as-judge dimensions (grounding, safety).
+      # Requires the ANTHROPIC_API_KEY secret set below.
+      # - name: Install the judge extra
+      #   run: pip install "assevra[judge]"
+
+      - name: Run the Assevra scorecard (gates the build)
+        # --gate exits non-zero when any scored dimension is below its threshold,
+        # failing the job. Point --dataset at your own .jsonl.
+        env:
+          # Optional: set this repo secret to enable the judge dimensions.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: assevra run --dataset path/to/your_dataset.jsonl --gate
+
+      - name: Upload the scorecard
+        # `always()` so you still get the report on a failing gate.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assevra-scorecard
+          path: |
+            scorecard.html
+            scorecard.md
+            scorecard.json
+          if-no-files-found: warn

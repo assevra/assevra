@@ -113,6 +113,22 @@ the safety heuristic, and skips grounding; set `ANTHROPIC_API_KEY` to enable the
 judge dimensions. Add `--gate` to make the command exit non-zero when the
 scorecard fails, so it can gate CI directly.
 
+## Gate your CI
+
+Want your own repo's CI to fail when your agent regresses — the way this repo
+gates itself? Copy [`examples/ci-gate.yml`](examples/ci-gate.yml) into your
+`.github/workflows/` and point `--dataset` at your labeled `.jsonl`:
+
+```yaml
+- run: pip install assevra
+- run: assevra run --dataset path/to/your_dataset.jsonl --gate   # exits non-zero on regression
+```
+
+The deterministic dimensions (PII, task-completion) run with no API key; set an
+`ANTHROPIC_API_KEY` secret to also gate on the judge dimensions (grounding,
+safety). The example uploads `scorecard.html` as a build artifact so you can open
+the report from any run.
+
 ## Evaluate your own agent
 
 Assevra **does not run your agent** — it scores outputs you have already
