@@ -329,6 +329,9 @@ plain JSONL — commit it (or cache/restore it in CI) to keep the series across
 runs and machines. A regression prints a `Change since …` table and, with
 `--fail-on-regression`, exits non-zero.
 
+When two history runs contain the same row IDs, the comparison also reports a
+paired McNemar p-value for each dimension.
+
 ## 🏛️ Map to governance frameworks — the Agent Card
 
 Regulated-vertical buyers ask "prove the agent is safe," and their security review
