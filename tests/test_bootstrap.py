@@ -199,6 +199,55 @@ def test_bad_dimension_and_empty_input_raise():
             raise AssertionError("expected BootstrapError when nothing extractable")
 
 
+def test_csv_recognized_columns():
+    with tempfile.TemporaryDirectory() as tmp:
+        src = _write(
+            tmp,
+            "data.csv",
+            "prompt,response,context\n"
+            "hello,hi there,some context\n"
+            "what is ai,artificial intelligence,facts\n",
+        )
+        rows, fmt = bs.bootstrap(src)
+        assert fmt == "csv"
+        assert len(rows) == 2
+        assert rows[0]["input"] == "hello"
+        assert rows[0]["agent_output"] == "hi there"
+        assert rows[0]["context"] == "some context"
+        assert rows[1]["input"] == "what is ai"
+        assert rows[1]["agent_output"] == "artificial intelligence"
+        assert rows[1]["context"] == "facts"
+
+
+def test_csv_explicit_mapping_overrides_aliases():
+    with tempfile.TemporaryDirectory() as tmp:
+        src = _write(
+            tmp,
+            "data.csv",
+            "q,resp\n"
+            "question text,answer text\n",
+        )
+        rows, _ = bs.bootstrap(src, input_field="q", output_field="resp")
+        assert rows[0]["input"] == "question text"
+        assert rows[0]["agent_output"] == "answer text"
+
+
+def test_csv_no_recognizable_columns_raises():
+    with tempfile.TemporaryDirectory() as tmp:
+        src = _write(
+            tmp,
+            "data.csv",
+            "col1,col2\n"
+            "x,y\n",
+        )
+        try:
+            bs.bootstrap(src)
+        except bs.BootstrapError:
+            pass
+        else:
+            raise AssertionError("expected BootstrapError for CSV with no recognizable columns")
+
+
 def test_drafted_dataset_is_runnable():
     """A drafted, unlabeled dataset must load and score without error (unknown
     `_review` keys ignored; empty must_include surfaces as 'nothing to verify')."""

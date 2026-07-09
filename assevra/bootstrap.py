@@ -20,6 +20,10 @@ Four input shapes are understood out of the box, all dependency-free:
                     detected from common aliases (prompt/question/query for input,
                     response/completion/answer for output, ...), or set explicitly
                     with ``--input-field`` / ``--output-field`` / ``--context-field``.
+  * ``csv``      -- CSV files (one row per interaction). Column names are
+                    matched against the same alias map used by ``generic``,
+                    or mapped explicitly with ``--input-field`` / ``--output-field`` /
+                    ``--context-field``.
   * ``openai``   -- OpenAI chat-completions logs (a ``messages`` list and/or a
                     ``choices`` response), including ``{request, response}`` pairs.
   * ``anthropic`` -- Anthropic Messages API logs (user/assistant messages,
@@ -35,6 +39,7 @@ under-specified rows simply surface as "nothing to verify" until you label them.
 """
 from __future__ import annotations
 
+import csv
 import json
 from typing import Any, Iterable, Optional
 
@@ -126,6 +131,20 @@ def _load_records(path: str) -> list[Any]:
 # --------------------------------------------------------------------------- #
 # Format detection + extraction                                                #
 # --------------------------------------------------------------------------- #
+def _load_csv(path: str) -> list[dict[str, str]]:
+    """Read a CSV file and return each row as a dict (string values only)."""
+    with open(path, encoding="utf-8", newline="") as fh:
+        reader = csv.DictReader(fh)
+        rows: list[dict[str, str]] = []
+        for lineno, row in enumerate(reader, start=1):
+            if not row:
+                continue
+            rows.append({k: v for k, v in row.items() if v is not None})
+        if not rows:
+            raise BootstrapError(f"{path}: CSV file is empty or has no data rows")
+        return rows
+
+
 def _looks_like_otel(records: list[Any]) -> bool:
     for rec in records[:5]:
         if isinstance(rec, dict) and ("resourceSpans" in rec or "scopeSpans" in rec):
@@ -367,6 +386,7 @@ def bootstrap(
     context_field: Optional[str] = None,
 ) -> tuple[list[dict], str]:
     """Draft Assevra dataset rows from a file of captured interactions.
+    Supported formats: auto, generic, csv, openai, anthropic, otel.
 
     Returns (rows, resolved_format). Raises BootstrapError on unusable input.
     """
@@ -376,11 +396,18 @@ def bootstrap(
             f"{sorted(_DIMENSION_TEMPLATE)}"
         )
 
-    records = _load_records(source_path)
-    resolved = detect_format(records) if fmt == "auto" else fmt
-    if resolved not in ("generic", "openai", "anthropic", "otel"):
+    if fmt == "csv" or (fmt == "auto" and source_path.endswith(".csv")):
+        resolved = "csv"
+        records = _load_csv(source_path)
+    else:
+        records = _load_records(source_path)
+        resolved = detect_format(records) if fmt == "auto" else fmt
+
+    if resolved == "csv":
+        pass  # already loaded via _load_csv above
+    elif resolved not in ("generic", "openai", "anthropic", "otel"):
         raise BootstrapError(
-            f"unknown format {resolved!r}; expected generic, openai, anthropic, or otel"
+            f"unknown format {resolved!r}; expected generic, csv, openai, anthropic, or otel"
         )
 
     interactions: list[dict] = []
@@ -397,6 +424,11 @@ def bootstrap(
     elif resolved == "anthropic":
         for rec in records:
             got = _extract_anthropic(rec) if isinstance(rec, dict) else None
+            if got:
+                interactions.append(got)
+    elif resolved == "csv":
+        for rec in records:
+            got = _extract_generic(rec, input_field, output_field, context_field)
             if got:
                 interactions.append(got)
     else:  # generic
