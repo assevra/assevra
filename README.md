@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/hero.png" alt="Assevra — the reliability scorecard for LLM agents" width="860">
+<img src="docs/assets/logo.png" alt="Assevra" width="340">
 
 # Assevra
 
@@ -21,6 +21,8 @@
 ![every number 95% CI](https://img.shields.io/badge/every%20number-95%25%20CI-8A2BE2)
 
 **[Website](https://assevra.ai)** · **[Live example scorecard](https://assevra.ai/example-scorecard.html)** · **[Methodology](METHODOLOGY.md)** · **[Cite](https://doi.org/10.5281/zenodo.21200852)**
+
+<a href="https://assevra.ai"><img src="docs/assets/hero.png" alt="The Assevra website — Trust your AI agents. Let's prove it. A signed reliability scorecard with per-dimension 95% confidence intervals." width="860"></a>
 
 <a href="https://assevra.ai/example-scorecard.html"><img src="docs/assets/scorecard.png" alt="An Assevra reliability scorecard: a gradient header with a PASS verdict, a stat strip showing 4/4 dimensions passed over 114 rows, a summary table with 95% confidence intervals per dimension, and a per-dimension confidence-interval bar with pass/fail rows." width="860"></a>
 
