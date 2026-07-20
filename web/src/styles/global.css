@@ -1,0 +1,226 @@
+@import 'tailwindcss';
+
+/*
+  Assevra product site — modern, light, indigo brand.
+  Brand: #3f3fb0 (matches the logo). Cool near-white surfaces, soft depth.
+*/
+@theme {
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  --font-mono:
+    ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Monaco, 'Cascadia Code', Consolas,
+    'Liberation Mono', monospace;
+
+  --width-content: 78rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root {
+  color-scheme: light;
+
+  --bg: #ffffff;
+  --bg-tint: #f6f7fc;
+  --surface: #ffffff;
+  --surface-2: #f4f5fb;
+  --text: #14162e;
+  --text-muted: #5b6178;
+  --border: #e6e8f2;
+  --border-strong: #d5d8ea;
+
+  --brand: #3f3fb0;
+  --brand-2: #5b5bd6;
+  --brand-ink: #2a2a7a;
+  --brand-soft: #eef0fb;
+
+  --ok: #1f9d5b;
+  --ok-soft: #e7f6ed;
+  --warn: #c07a1b;
+
+  --radius-sm: 0.4rem;
+  --radius: 0.7rem;
+  --radius-lg: 1.1rem;
+  --radius-xl: 1.6rem;
+
+  --shadow-sm: 0 1px 2px rgba(20, 22, 46, 0.06);
+  --shadow: 0 6px 20px rgba(20, 22, 46, 0.08), 0 1px 3px rgba(20, 22, 46, 0.06);
+  --shadow-lg: 0 24px 60px rgba(30, 30, 100, 0.16), 0 8px 20px rgba(20, 22, 46, 0.08);
+
+  --dur: 220ms;
+}
+
+* {
+  border-color: var(--border);
+}
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: 5.5rem;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1,
+h2,
+h3,
+h4 {
+  color: var(--text);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  text-wrap: balance;
+  margin: 0;
+}
+a {
+  color: inherit;
+}
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+::selection {
+  background: color-mix(in srgb, var(--brand) 22%, transparent);
+}
+
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -3rem;
+  z-index: 100;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  transition: top var(--dur) var(--ease-out);
+}
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---- layout utilities ---- */
+.container {
+  max-width: var(--width-content);
+  margin-inline: auto;
+  padding-inline: 1.5rem;
+}
+.section {
+  padding-block: clamp(3rem, 2rem + 5vw, 6rem);
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--brand);
+}
+.section-title {
+  font-size: clamp(1.7rem, 1.2rem + 2.4vw, 2.6rem);
+  margin-top: 0.6rem;
+}
+.section-lede {
+  color: var(--text-muted);
+  font-size: 1.15rem;
+  max-width: 58ch;
+  margin-top: 0.9rem;
+}
+
+/* buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.75rem 1.3rem;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform var(--dur) var(--ease-out),
+    background var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+.btn-primary {
+  background: var(--brand);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(63, 63, 176, 0.28);
+}
+.btn-primary:hover {
+  background: var(--brand-ink);
+  transform: translateY(-1px);
+}
+.btn-ghost {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.btn-ghost:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+  transform: translateY(-1px);
+}
+
+/* pills / badges */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+}
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* card */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.6rem;
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out);
+}
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+  border-color: var(--border-strong);
+}
+
+/* code chip */
+.code {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+}

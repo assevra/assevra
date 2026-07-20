@@ -1,16 +1,16 @@
-name: Deploy docs to GitHub Pages
+name: Deploy site to GitHub Pages
 
-# Publishes docs/ to GitHub Pages via an Actions pipeline we control, with a
-# concurrency group so rapid consecutive pushes queue instead of colliding on
-# the single github-pages environment (the cause of the intermittent
-# "Deployment failed, try again later." under the default branch-source deploy).
+# Builds the Astro marketing site in web/ and publishes it to GitHub Pages.
+# The custom domain (assevra.ai) travels with the artifact via web/public/CNAME.
+# Serialized via a concurrency group so rapid pushes queue instead of colliding
+# on the single github-pages environment.
 
 on:
   push:
     branches: [main]
     paths:
-      - "docs/**"
-      - ".github/workflows/pages.yml"
+      - 'web/**'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -18,8 +18,6 @@ permissions:
   pages: write
   id-token: write
 
-# Serialize deployments; let an in-progress deploy finish rather than cancelling
-# it (cancelling a live Pages deploy is what triggers the flaky failure).
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -34,15 +32,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build
+        working-directory: web
+        run: npm run build
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload docs artifact
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # docs/ contains index.html, the example scorecard, and CNAME
-          # (assevra.ai) — the custom domain travels with the artifact.
-          path: docs
+          path: web/dist
 
       - name: Deploy to GitHub Pages
         id: deployment

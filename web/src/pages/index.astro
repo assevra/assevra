@@ -1,0 +1,1195 @@
+---
+import { Image } from 'astro:assets';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import logo from '../assets/logo.png';
+
+const GH = 'https://github.com/assevra/assevra';
+const PYPI = 'https://pypi.org/project/assevra/';
+const DOI = 'https://doi.org/10.5281/zenodo.21200852';
+const METHOD = 'https://github.com/assevra/assevra/blob/main/METHODOLOGY.md';
+const SECURITY = 'https://github.com/assevra/assevra/blob/main/SECURITY.md';
+const CHANGELOG = 'https://github.com/assevra/assevra/blob/main/CHANGELOG.md';
+const README = 'https://github.com/assevra/assevra/blob/main/README.md';
+const EXAMPLE = '/example-scorecard.html';
+
+const nav = [
+  { label: 'Capabilities', href: '#capabilities' },
+  { label: 'How it works', href: '#pipeline' },
+  { label: 'Scorecard', href: '#scorecard' },
+  { label: 'Methodology', href: '#methodology' },
+];
+
+const badges = [
+  'MIT licensed',
+  'Python 3.10+',
+  'zero-dependency core',
+  'DOI 10.5281/zenodo.21200852',
+];
+
+const frameworks = ['EU AI Act', 'NIST AI RMF', 'ISO/IEC 42001', 'OWASP LLM Top 10'];
+
+const capabilities = [
+  {
+    title: 'A signed artifact, not a dashboard',
+    body: 'Emits a self-contained scorecard — Markdown, JSON, and styled HTML — you can commit, attach to a PR, or mail to a reviewer. Sign it with Ed25519 so anyone can verify it was produced by you and never altered.',
+    tag: 'assevra sign · verify',
+    icon: 'shield',
+  },
+  {
+    title: 'Honest error bars',
+    body: 'A bare "0.92" hides how few samples it came from. Every dimension carries a 95% Wilson confidence interval, so nobody over-reads a small-sample move — rigor the field is only starting to adopt.',
+    tag: '95% Wilson CI',
+    icon: 'chart',
+  },
+  {
+    title: 'Start from your traces',
+    body: 'No blank-page JSONL. Point bootstrap at logs you already have — generic traces, OpenAI chat logs, or OpenTelemetry spans — and it drafts the dataset, leaving only the answer key for you.',
+    tag: 'assevra bootstrap',
+    icon: 'import',
+  },
+  {
+    title: 'Trustworthy judging',
+    body: "Score with a panel of models (a jury) and surface disagreement as a signal. Then calibrate proves the judge agrees with humans — Cohen's κ against a labeled hold-out, with a κ ≥ 0.85 bar.",
+    tag: '--judge-panel · calibrate',
+    icon: 'jury',
+  },
+  {
+    title: 'Catch silent regressions',
+    body: 'Track reliability over time and fail the build when a dimension drops — flagged only when a move falls outside the previous interval or crosses a threshold, so noise never triggers a false alarm.',
+    tag: '--history · --fail-on-regression',
+    icon: 'pulse',
+  },
+  {
+    title: 'Map to governance frameworks',
+    body: 'The attest command turns a scorecard into an Agent Card that maps your evidence to the EU AI Act, NIST AI RMF, ISO/IEC 42001, and OWASP LLM Top 10 — the artifact a procurement review is looking for.',
+    tag: 'assevra attest',
+    icon: 'doc',
+  },
+];
+
+const pipeline = [
+  { cmd: 'bootstrap', label: 'Draft a dataset from your existing traces' },
+  { cmd: 'score', label: 'Grade with a jury of models' },
+  { cmd: 'calibrate', label: 'Prove the judge agrees with humans (κ)' },
+  { cmd: 'sign', label: 'Seal the scorecard with Ed25519' },
+  { cmd: 'attest', label: 'Map evidence to governance frameworks' },
+  { cmd: 'CI gate', label: 'Fail the build on a regression' },
+];
+
+const scorecard = [
+  { dim: 'Grounding', mode: 'llm-judge', score: '0.94', ci: '0.87–0.97', n: '80', thr: '0.90' },
+  {
+    dim: 'Safety / refusal',
+    mode: 'llm-judge',
+    score: '1.00',
+    ci: '0.94–1.00',
+    n: '60',
+    thr: '1.00',
+  },
+  { dim: 'PII-leak', mode: 'deterministic', score: '1.00', ci: '0.95–1.00', n: '72', thr: '1.00' },
+  {
+    dim: 'Task-completion',
+    mode: 'deterministic',
+    score: '0.96',
+    ci: '0.90–0.98',
+    n: '90',
+    thr: '0.90',
+  },
+];
+
+const dimensions = [
+  {
+    name: 'Grounding / faithfulness',
+    mode: 'llm-judge',
+    q: 'Is every factual claim traceable to the provided context, or invented?',
+    bar: 'Pass rate ≥ 0.90',
+  },
+  {
+    name: 'Safety / refusal',
+    mode: 'llm-judge',
+    q: 'Does the agent refuse what it must — and answer what it should?',
+    bar: '1.00 · zero tolerance',
+  },
+  {
+    name: 'PII-leak',
+    mode: 'deterministic',
+    q: 'Does personal data escape into an output? Zero tolerance on hard entities.',
+    bar: '1.00 · zero tolerance',
+  },
+  {
+    name: 'Task-completion',
+    mode: 'deterministic',
+    q: 'Are the facts a correct completion requires actually present?',
+    bar: 'Pass rate ≥ 0.90',
+  },
+];
+
+const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
+---
+
+<BaseLayout
+  title="Assevra — the reliability scorecard for LLM agents"
+  description="Assevra turns agent outputs you've already captured into a portable, signed reliability scorecard — every number backed by a 95% confidence interval, runnable offline, ready to gate CI and stand up in an audit."
+>
+  <!-- Header -->
+  <header class="hdr">
+    <div class="container hdr-in">
+      <a href="/" class="brand" aria-label="Assevra home">
+        <Image src={logo} alt="Assevra" widths={[180, 260]} sizes="150px" loading="eager" />
+      </a>
+      <nav class="hdr-nav" aria-label="Primary">
+        {nav.map((n) => <a href={n.href}>{n.label}</a>)}
+      </nav>
+      <div class="hdr-cta">
+        <a href={GH} class="ghlink" target="_blank" rel="noopener noreferrer" aria-label="GitHub">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"
+            ><path
+              d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49v-1.9c-2.78.62-3.37-1.2-3.37-1.2-.46-1.18-1.11-1.5-1.11-1.5-.9-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.9 1.56 2.36 1.1 2.94.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.05 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.4 9.4 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.92-2.34 4.79-4.57 5.04.36.32.68.94.68 1.9v2.82c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"
+            ></path></svg
+          >
+          <span>Star</span>
+        </a>
+        <a href="#install" class="btn btn-primary sm">Get started</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="container hero-in">
+        <div class="hero-copy">
+          <p class="eyebrow">Open source · a named reliability methodology</p>
+          <h1 class="hero-title">
+            Trust your AI agents.<br /><span class="ht-accent">Let's prove it.</span>
+          </h1>
+          <p class="hero-sub">
+            Not another eval dashboard. Assevra turns agent outputs you've already captured into a
+            portable, <strong>signed reliability scorecard</strong> — every number backed by a 95% confidence
+            interval, runnable offline, ready to gate CI and stand up in an audit.
+          </p>
+
+          <div class="install" id="install">
+            <code class="code" id="install-cmd">pip install assevra</code>
+            <button type="button" class="copy" id="copy-btn" aria-label="Copy install command">
+              Copy
+            </button>
+          </div>
+
+          <div class="hero-actions">
+            <a href={GH} class="btn btn-primary" target="_blank" rel="noopener noreferrer">
+              View on GitHub →
+            </a>
+            <a href={EXAMPLE} class="btn btn-ghost">See an example scorecard</a>
+          </div>
+
+          <ul class="badges">
+            {badges.map((b) => <li class="pill">{b}</li>)}
+          </ul>
+        </div>
+
+        <!-- Embedded scorecard artifact -->
+        <div class="hero-visual" aria-hidden="false">
+          <div class="sc-card">
+            <div class="sc-head">
+              <div class="sc-title">
+                <span class="sc-dot" aria-hidden="true"></span>
+                Assevra Reliability Scorecard
+              </div>
+              <span class="sc-verdict">Overall · PASS</span>
+            </div>
+            <table class="sc-table">
+              <thead>
+                <tr>
+                  <th>Dimension</th>
+                  <th>Score</th>
+                  <th class="hide-sm">95% CI</th>
+                  <th class="hide-sm">n</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {
+                  scorecard.map((r) => (
+                    <tr>
+                      <td>
+                        <span class="sc-dim">{r.dim}</span>
+                        <span class="sc-mode mono">{r.mode}</span>
+                      </td>
+                      <td class="mono">{r.score}</td>
+                      <td class="mono hide-sm">{r.ci}</td>
+                      <td class="mono hide-sm">{r.n}</td>
+                      <td>
+                        <span class="sc-pass">PASS</span>
+                      </td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+            <div class="sc-foot mono">signed · Ed25519 · verifiable offline</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- framework strip -->
+      <div class="container">
+        <div class="frameworks">
+          <span class="fw-label mono">Speaks the language of your security review</span>
+          <ul>
+            {frameworks.map((f) => <li>{f}</li>)}
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Capabilities -->
+    <section class="section" id="capabilities">
+      <div class="container">
+        <p class="eyebrow">What it does</p>
+        <h2 class="section-title">A full reliability toolkit, one command away</h2>
+        <p class="section-lede">
+          From a labeled dataset to a signed, framework-mapped artifact — the whole arc of proving
+          an agent behaves, without a backend or a login.
+        </p>
+
+        <div class="cap-grid">
+          {
+            capabilities.map((c) => (
+              <article class="card cap">
+                <span class={`cap-icon icon-${c.icon}`} aria-hidden="true" />
+                <h3>{c.title}</h3>
+                <p>{c.body}</p>
+                <code class="cap-tag mono">{c.tag}</code>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- Pipeline -->
+    <section class="section band" id="pipeline">
+      <div class="container">
+        <p class="eyebrow">How it works</p>
+        <h2 class="section-title">From your traces to a signed, defensible artifact</h2>
+        <p class="section-lede">
+          Six commands, no backend. Each step is deterministic where it can be, judged where it must
+          be, and always reports the interval — not just the mean.
+        </p>
+
+        <ol class="flow">
+          {
+            pipeline.map((s, i) => (
+              <li class="flow-step">
+                <div class="flow-node">
+                  <span class="flow-num mono">{i + 1}</span>
+                  <span class="flow-cmd mono">{s.cmd}</span>
+                </div>
+                <p class="flow-label">{s.label}</p>
+              </li>
+            ))
+          }
+        </ol>
+      </div>
+    </section>
+
+    <!-- Scorecard -->
+    <section class="section" id="scorecard">
+      <div class="container sc-split">
+        <div class="sc-intro">
+          <p class="eyebrow">The artifact</p>
+          <h2 class="section-title">A scorecard you can defend</h2>
+          <p class="section-lede">
+            Four independent dimensions, each scored against a fixed threshold with an interval and
+            a sample size. The verdict is a conjunction — one leak sinks the run.
+          </p>
+          <div class="sc-actions">
+            <a href={EXAMPLE} class="btn btn-ghost">Open the full rendered example →</a>
+          </div>
+        </div>
+
+        <div class="sc-card lg">
+          <div class="sc-head">
+            <div class="sc-title">
+              <span class="sc-dot" aria-hidden="true"></span>
+              Assevra Reliability Scorecard
+            </div>
+            <span class="sc-verdict">Overall · PASS</span>
+          </div>
+          <table class="sc-table">
+            <thead>
+              <tr>
+                <th>Dimension</th>
+                <th>Mode</th>
+                <th>Score</th>
+                <th class="hide-sm">95% CI</th>
+                <th class="hide-sm">n</th>
+                <th class="hide-sm">Thr.</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                scorecard.map((r) => (
+                  <tr>
+                    <td class="sc-dim">{r.dim}</td>
+                    <td class="mono sc-mode">{r.mode}</td>
+                    <td class="mono">{r.score}</td>
+                    <td class="mono hide-sm">{r.ci}</td>
+                    <td class="mono hide-sm">{r.n}</td>
+                    <td class="mono hide-sm">{r.thr}</td>
+                    <td>
+                      <span class="sc-pass">PASS</span>
+                    </td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+          <div class="sc-foot">
+            Illustrative example · every score carries its sample size and a 95% Wilson interval ·
+            signable with Ed25519.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Methodology -->
+    <section class="section band" id="methodology">
+      <div class="container">
+        <p class="eyebrow">The methodology</p>
+        <h2 class="section-title">Four dimensions, defined and thresholded</h2>
+        <p class="section-lede">
+          Two principles run through all of it: <strong>deterministic before judge</strong>, and
+          <strong>report the interval, not just the mean</strong>. The full spec is public and
+          versioned.
+        </p>
+
+        <div class="dim-grid">
+          {
+            dimensions.map((d) => (
+              <article class="card dim">
+                <div class="dim-head">
+                  <h3>{d.name}</h3>
+                  <span class={`dim-mode mono ${d.mode === 'deterministic' ? 'det' : 'judge'}`}>
+                    {d.mode}
+                  </span>
+                </div>
+                <p class="dim-q">{d.q}</p>
+                <div class="dim-bar mono">{d.bar}</div>
+              </article>
+            ))
+          }
+        </div>
+
+        <p class="dim-note">
+          Plus <strong>pass^k</strong> and run-to-run consistency over repeated trials — because a deployed
+          agent needs to work every time, not just once.
+        </p>
+        <a href={METHOD} class="link-arrow" target="_blank" rel="noopener noreferrer">
+          Read the specification →
+        </a>
+      </div>
+    </section>
+
+    <!-- Signing / verify -->
+    <section class="section">
+      <div class="container sign-split">
+        <div class="sign-copy">
+          <p class="eyebrow">Verifiable evidence</p>
+          <h2 class="section-title">Signed, so a reviewer can trust it</h2>
+          <p class="section-lede">
+            A shared HTML file is convenient; a signed one is evidence. Pin the maintainer's public
+            key to confirm a scorecard was produced by them and not altered — verification fails if
+            a single byte changed.
+          </p>
+          <a href={SECURITY} class="link-arrow" target="_blank" rel="noopener noreferrer">
+            Details in SECURITY.md →
+          </a>
+        </div>
+
+        <div class="sign-box">
+          <div class="key-block">
+            <span class="key-label mono">Maintainer signing key · Ed25519</span>
+            <code class="key mono">{SIGNING_KEY}</code>
+          </div>
+          <pre
+            class="term"><span class="term-prompt">$</span> assevra verify \
+  --scorecard scorecard.json \
+  --signature scorecard.sig.json \
+  --public-key &lt;key&gt;</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cite + CTA -->
+    <section class="section cta-band">
+      <div class="container cta-in">
+        <div class="cta-copy">
+          <h2 class="cta-title">Prove your agent behaves — and hand someone the receipt.</h2>
+          <p>Install once, run offline, commit the artifact. No backend, no login, MIT-licensed.</p>
+          <div class="hero-actions">
+            <a href={GH} class="btn btn-primary" target="_blank" rel="noopener noreferrer">
+              Get started on GitHub →
+            </a>
+            <a href={PYPI} class="btn btn-ghost" target="_blank" rel="noopener noreferrer">
+              View on PyPI
+            </a>
+          </div>
+        </div>
+        <div class="cite card">
+          <p class="cite-label eyebrow">Cite Assevra</p>
+          <p class="cite-text">
+            Divi, Veera Ravindra, and Gullapalli, Sneha. <em
+              >Assevra: A Reliability Scorecard for LLM Agents</em
+            >, v0.3, 2026.
+          </p>
+          <a href={DOI} class="mono cite-doi" target="_blank" rel="noopener noreferrer">
+            DOI 10.5281/zenodo.21200852
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="ftr">
+    <div class="container ftr-in">
+      <div class="ftr-brand">
+        <Image src={logo} alt="Assevra" widths={[170]} sizes="150px" class="ftr-logo" />
+        <p>
+          An open reference implementation and named methodology for measuring the reliability of
+          LLM agents.
+        </p>
+      </div>
+      <nav class="ftr-col" aria-label="Product">
+        <p class="ftr-h">Product</p>
+        <a href="#capabilities">Capabilities</a>
+        <a href={EXAMPLE}>Example scorecard</a>
+        <a href={PYPI} target="_blank" rel="noopener noreferrer">Install (PyPI)</a>
+      </nav>
+      <nav class="ftr-col" aria-label="Docs">
+        <p class="ftr-h">Docs</p>
+        <a href={README} target="_blank" rel="noopener noreferrer">Getting started</a>
+        <a href={METHOD} target="_blank" rel="noopener noreferrer">Methodology spec</a>
+        <a href={SECURITY} target="_blank" rel="noopener noreferrer">Verify &amp; security</a>
+      </nav>
+      <nav class="ftr-col" aria-label="Project">
+        <p class="ftr-h">Project</p>
+        <a href={GH} target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href={CHANGELOG} target="_blank" rel="noopener noreferrer">Changelog</a>
+        <a href={DOI} target="_blank" rel="noopener noreferrer">Zenodo (DOI)</a>
+      </nav>
+    </div>
+    <div class="container ftr-legal">
+      <p>
+        MIT licensed · an open-source research project by Veera Ravindra Divi and Sneha Gullapalli.
+      </p>
+      <p class="ftr-tag">Reliability claims are only as strong as what they honestly exclude.</p>
+    </div>
+  </footer>
+
+  <script>
+    const btn = document.getElementById('copy-btn');
+    btn?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText('pip install assevra');
+        const prev = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => (btn.textContent = prev), 1600);
+      } catch {
+        /* clipboard unavailable */
+      }
+    });
+  </script>
+</BaseLayout>
+
+<style>
+  /* ---------- header ---------- */
+  .hdr {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: saturate(1.4) blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .hdr-in {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding-block: 0.7rem;
+  }
+  .brand {
+    display: inline-flex;
+    margin-right: auto;
+  }
+  .brand :global(img) {
+    height: 42px;
+    width: auto;
+  }
+  .hdr-nav {
+    display: flex;
+    gap: 1.6rem;
+  }
+  .hdr-nav a {
+    text-decoration: none;
+    color: var(--text-muted);
+    font-size: 0.98rem;
+    font-weight: 500;
+    transition: color var(--dur);
+  }
+  .hdr-nav a:hover {
+    color: var(--brand);
+  }
+  .hdr-cta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .ghlink {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    text-decoration: none;
+    color: var(--text);
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.5rem 0.85rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    transition:
+      border-color var(--dur),
+      color var(--dur);
+  }
+  .ghlink:hover {
+    border-color: var(--brand);
+    color: var(--brand);
+  }
+  .btn.sm {
+    padding: 0.55rem 1.1rem;
+    font-size: 0.95rem;
+  }
+
+  /* ---------- hero ---------- */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, var(--bg-tint), var(--bg) 60%);
+    border-bottom: 1px solid var(--border);
+  }
+  .hero-glow {
+    position: absolute;
+    inset: -30% -10% auto -10%;
+    height: 70%;
+    background:
+      radial-gradient(
+        60% 60% at 75% 20%,
+        color-mix(in srgb, var(--brand) 22%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        50% 50% at 20% 10%,
+        color-mix(in srgb, var(--brand-2) 16%, transparent),
+        transparent 70%
+      );
+    filter: blur(10px);
+    pointer-events: none;
+  }
+  .hero-in {
+    position: relative;
+    display: grid;
+    gap: 3rem;
+    padding-block: clamp(3rem, 2rem + 6vw, 6rem) clamp(2rem, 1.5rem + 3vw, 3.5rem);
+    align-items: center;
+  }
+  .hero-title {
+    font-size: clamp(2.2rem, 1.5rem + 3vw, 3.4rem);
+    margin-top: 0.9rem;
+    line-height: 1.08;
+  }
+  .hero-title .ht-accent {
+    color: var(--brand);
+  }
+  .hero-sub {
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    max-width: 40ch;
+    margin-top: 1.25rem;
+  }
+  .hero-sub strong {
+    color: var(--text);
+  }
+  .install {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 1.75rem;
+    background: var(--text);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 0.5rem 0.6rem 0.5rem 1rem;
+    box-shadow: var(--shadow);
+  }
+  .install .code {
+    font-size: 1rem;
+  }
+  .install .code::before {
+    content: '$ ';
+    color: color-mix(in srgb, #fff 55%, transparent);
+  }
+  .copy {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+    background: #fff;
+    border: 0;
+    border-radius: 0.45rem;
+    padding: 0.35rem 0.7rem;
+    cursor: pointer;
+  }
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.75rem;
+  }
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+    margin: 1.75rem 0 0;
+  }
+
+  /* scorecard card (hero + section) */
+  .hero-visual {
+    justify-self: center;
+    width: 100%;
+    max-width: 520px;
+  }
+  .sc-card {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+  .sc-card.lg {
+    max-width: 640px;
+  }
+  .sc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .sc-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-weight: 700;
+    font-size: 0.98rem;
+  }
+  .sc-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: var(--ok);
+    box-shadow: 0 0 0 3px var(--ok-soft);
+  }
+  .sc-verdict {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--ok);
+    background: var(--ok-soft);
+    border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
+    border-radius: 999px;
+    padding: 0.25rem 0.7rem;
+  }
+  .sc-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+  }
+  .sc-table th {
+    text-align: left;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: 0.7rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .sc-table th:first-child,
+  .sc-table td:first-child {
+    padding-left: 1.25rem;
+  }
+  .sc-table th:last-child,
+  .sc-table td:last-child {
+    padding-right: 1.25rem;
+    text-align: right;
+  }
+  .sc-table td {
+    padding: 0.7rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .sc-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  .sc-dim {
+    display: block;
+    font-weight: 600;
+  }
+  .sc-mode {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+  .sc-pass {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--ok);
+    background: var(--ok-soft);
+    border-radius: 0.4rem;
+    padding: 0.2rem 0.5rem;
+  }
+  .sc-foot {
+    padding: 0.85rem 1.25rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border-top: 1px solid var(--border);
+  }
+
+  /* frameworks strip */
+  .frameworks {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.5rem;
+    padding: 1.4rem 0 2.4rem;
+  }
+  .fw-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .frameworks ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.6rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .frameworks li {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--brand-ink);
+    background: var(--brand-soft);
+    border: 1px solid color-mix(in srgb, var(--brand) 18%, transparent);
+    border-radius: 999px;
+    padding: 0.3rem 0.8rem;
+  }
+
+  /* ---------- bands ---------- */
+  .band {
+    background: var(--bg-tint);
+    border-block: 1px solid var(--border);
+  }
+
+  /* capabilities */
+  .cap-grid {
+    display: grid;
+    gap: 1.1rem;
+    grid-template-columns: 1fr;
+    margin-top: 2.5rem;
+  }
+  .cap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .cap h3 {
+    font-size: 1.18rem;
+  }
+  .cap p {
+    color: var(--text-muted);
+    margin: 0;
+    font-size: 0.98rem;
+  }
+  .cap-tag {
+    align-self: flex-start;
+    margin-top: auto;
+    font-size: 0.8rem;
+    color: var(--brand-ink);
+    background: var(--brand-soft);
+    border-radius: 0.4rem;
+    padding: 0.25rem 0.6rem;
+  }
+  .cap-icon {
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 0.7rem;
+    background: var(--brand-soft);
+    display: grid;
+    place-items: center;
+    color: var(--brand);
+  }
+  .cap-icon::before {
+    content: '';
+    width: 1.3rem;
+    height: 1.3rem;
+    background: currentColor;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+  }
+  .icon-shield::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M12 2 20 5v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V5Z'/%3E%3Cpath d='M8.5 12l2.5 2.5 4.5-5' stroke-linecap='round'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M12 2 20 5v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V5Z'/%3E%3Cpath d='M8.5 12l2.5 2.5 4.5-5' stroke-linecap='round'/%3E%3C/svg%3E");
+  }
+  .icon-chart::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 20V10M10 20V4M16 20v-8M4 20h16'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 20V10M10 20V4M16 20v-8M4 20h16'/%3E%3C/svg%3E");
+  }
+  .icon-import::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v12M8 11l4 4 4-4M4 21h16'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v12M8 11l4 4 4-4M4 21h16'/%3E%3C/svg%3E");
+  }
+  .icon-jury::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='7' cy='8' r='3'/%3E%3Ccircle cx='17' cy='8' r='3'/%3E%3Cpath d='M2 20c0-3 2.5-5 5-5s5 2 5 5M12 20c0-3 2.5-5 5-5s5 2 5 5'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='7' cy='8' r='3'/%3E%3Ccircle cx='17' cy='8' r='3'/%3E%3Cpath d='M2 20c0-3 2.5-5 5-5s5 2 5 5M12 20c0-3 2.5-5 5-5s5 2 5 5'/%3E%3C/svg%3E");
+  }
+  .icon-pulse::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12h4l3 8 4-16 3 8h6'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12h4l3 8 4-16 3 8h6'/%3E%3C/svg%3E");
+  }
+  .icon-doc::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 2h8l4 4v16H6Z'/%3E%3Cpath d='M14 2v4h4M9 13h6M9 17h6'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 2h8l4 4v16H6Z'/%3E%3Cpath d='M14 2v4h4M9 13h6M9 17h6'/%3E%3C/svg%3E");
+  }
+
+  /* pipeline flow */
+  .flow {
+    list-style: none;
+    margin: 2.5rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr;
+    counter-reset: none;
+  }
+  .flow-step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    position: relative;
+  }
+  .flow-node {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .flow-num {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    background: var(--brand);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .flow-cmd {
+    font-weight: 700;
+    color: var(--brand-ink);
+    font-size: 1rem;
+  }
+  .flow-label {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    margin: 0;
+  }
+
+  /* scorecard section */
+  .sc-split {
+    display: grid;
+    gap: 2.5rem;
+    align-items: center;
+  }
+  .sc-actions {
+    margin-top: 1.5rem;
+  }
+
+  /* methodology */
+  .dim-grid {
+    display: grid;
+    gap: 1.1rem;
+    grid-template-columns: 1fr;
+    margin-top: 2.5rem;
+  }
+  .dim-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .dim-head h3 {
+    font-size: 1.1rem;
+  }
+  .dim-mode {
+    font-size: 0.72rem;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    white-space: nowrap;
+  }
+  .dim-mode.judge {
+    color: var(--brand-ink);
+    background: var(--brand-soft);
+  }
+  .dim-mode.det {
+    color: var(--ok);
+    background: var(--ok-soft);
+  }
+  .dim-q {
+    color: var(--text-muted);
+    margin: 0 0 1rem;
+    font-size: 0.98rem;
+  }
+  .dim-bar {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    border-top: 1px solid var(--border);
+    padding-top: 0.75rem;
+  }
+  .dim-note {
+    margin-top: 2rem;
+    color: var(--text-muted);
+    max-width: 62ch;
+  }
+  .dim-note strong {
+    color: var(--text);
+  }
+  .link-arrow {
+    display: inline-block;
+    margin-top: 1rem;
+    color: var(--brand);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .link-arrow:hover {
+    text-decoration: underline;
+  }
+
+  /* signing */
+  .sign-split {
+    display: grid;
+    gap: 2.5rem;
+    align-items: center;
+  }
+  .sign-box {
+    display: grid;
+    gap: 1rem;
+  }
+  .key-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.1rem;
+  }
+  .key-label {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+  }
+  .key {
+    display: block;
+    font-size: 0.85rem;
+    word-break: break-all;
+    color: var(--brand-ink);
+  }
+  .term {
+    background: var(--text);
+    color: #eceafe;
+    border-radius: var(--radius);
+    padding: 1.1rem 1.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.86rem;
+    line-height: 1.6;
+    overflow-x: auto;
+    margin: 0;
+    white-space: pre;
+  }
+  .term-prompt {
+    color: color-mix(in srgb, #eceafe 55%, transparent);
+    user-select: none;
+  }
+
+  /* CTA */
+  .cta-band {
+    background:
+      radial-gradient(
+        80% 120% at 50% 0%,
+        color-mix(in srgb, var(--brand) 12%, transparent),
+        transparent 70%
+      ),
+      var(--bg-tint);
+    border-top: 1px solid var(--border);
+  }
+  .cta-in {
+    display: grid;
+    gap: 2rem;
+    align-items: center;
+  }
+  .cta-title {
+    font-size: clamp(1.7rem, 1.2rem + 2.2vw, 2.5rem);
+    max-width: 20ch;
+  }
+  .cta-copy p {
+    color: var(--text-muted);
+    margin: 1rem 0 0;
+  }
+  .cite {
+    background: var(--surface);
+  }
+  .cite-text {
+    margin: 0.6rem 0 0.9rem;
+  }
+  .cite-doi {
+    font-size: 0.9rem;
+    color: var(--brand);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .cite-doi:hover {
+    text-decoration: underline;
+  }
+
+  /* footer */
+  .ftr {
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .ftr-in {
+    display: grid;
+    gap: 2rem;
+    padding-block: 3rem 2rem;
+    grid-template-columns: 1fr;
+  }
+  .ftr-brand :global(.ftr-logo) {
+    height: 34px;
+    width: auto;
+  }
+  .ftr-brand p {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    margin: 0.9rem 0 0;
+    max-width: 34ch;
+  }
+  .ftr-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .ftr-h {
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin: 0 0 0.2rem;
+  }
+  .ftr-col a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.92rem;
+  }
+  .ftr-col a:hover {
+    color: var(--brand);
+  }
+  .ftr-legal {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.5rem 1.5rem;
+    padding-block: 1.25rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+  .ftr-legal p {
+    margin: 0;
+  }
+  .ftr-tag {
+    font-style: italic;
+  }
+
+  /* hide-sm columns on very small screens */
+  @media (max-width: 480px) {
+    .sc-table .hide-sm {
+      display: none;
+    }
+  }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 900px) {
+    .hdr-nav {
+      display: none;
+    }
+  }
+  @media (min-width: 720px) {
+    .cap-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .dim-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .flow {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+  @media (min-width: 960px) {
+    .hero-in {
+      grid-template-columns: 1.15fr 0.85fr;
+    }
+    .sc-split {
+      grid-template-columns: 0.9fr 1.1fr;
+    }
+    .sign-split {
+      grid-template-columns: 1fr 1fr;
+    }
+    .cta-in {
+      grid-template-columns: 1.3fr 0.7fr;
+    }
+    .cap-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .flow {
+      grid-template-columns: repeat(6, 1fr);
+    }
+    .ftr-in {
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+    }
+  }
+</style>
