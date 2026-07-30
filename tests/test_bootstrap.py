@@ -251,7 +251,7 @@ def test_csv_no_recognizable_columns_raises():
 def test_drafted_dataset_is_runnable():
     """A drafted, unlabeled dataset must load and score without error (unknown
     `_review` keys ignored; empty must_include surfaces as 'nothing to verify')."""
-    from assevra.cli import build_scorecard
+    from assevra import evaluate
 
     with tempfile.TemporaryDirectory() as tmp:
         src = _write(tmp, "g.jsonl", '{"input":"i","output":"o with token"}\n')
@@ -259,7 +259,7 @@ def test_drafted_dataset_is_runnable():
         rows[0]["must_include"] = ["token"]  # label the one row
         out = os.path.join(tmp, "draft.jsonl")
         bs.write_dataset(rows, out)
-        card = build_scorecard(out, judge_model="")
+        card = evaluate(dataset=out, config={})
         assert card.overall_pass is True
 
 

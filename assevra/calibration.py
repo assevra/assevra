@@ -80,9 +80,16 @@ class Calibration:
     tn: int
     fn: int
 
+    # The default bar. Configurable per project via `calibration.kappa_bar`, but
+    # moving it is a decision to document, not a knob to quietly turn down.
+    KAPPA_BAR = 0.85
+
+    def trustworthy_at(self, bar: float = KAPPA_BAR) -> bool:
+        return self.kappa is not None and self.kappa >= bar
+
     @property
     def trustworthy(self) -> bool:
-        return self.kappa is not None and self.kappa >= 0.85
+        return self.trustworthy_at(self.KAPPA_BAR)
 
     def to_dict(self) -> dict:
         return {
@@ -118,11 +125,49 @@ def _fmt(x) -> str:
     return "—" if x is None else f"{x:.3f}"
 
 
-def render(overall: Calibration, per_dimension: dict) -> str:
+def to_artifact(
+    overall: Calibration,
+    per_dimension: dict,
+    judge_model: str = "",
+    judge_provider: str = "",
+    dataset: str = "",
+    label_field: str = "human_label",
+    bar: float = Calibration.KAPPA_BAR,
+    assevra_version: str = "",
+    generated_at: str = "",
+) -> dict:
+    """The calibration report as a schema-governed artifact.
+
+    Calibration is evidence in its own right — the thing that makes a judged
+    score citable — so it gets the same treatment as the scorecard: a stable
+    shape, a published schema, and a file you can attach to a review.
+    """
+    from . import schemas
+
+    return schemas.stamp(
+        {
+            "assevra_version": assevra_version,
+            "generated_at": generated_at or None,
+            "dataset": dataset or None,
+            "judge_model": judge_model,
+            "judge_provider": judge_provider or None,
+            "label_field": label_field,
+            "bar": bar,
+            "overall": {**overall.to_dict(), "trustworthy": overall.trustworthy_at(bar)},
+            "per_dimension": {
+                name: {**c.to_dict(), "trustworthy": c.trustworthy_at(bar)}
+                for name, c in per_dimension.items()
+            },
+        },
+        "calibration",
+    )
+
+
+def render(overall: Calibration, per_dimension: dict, bar: float = Calibration.KAPPA_BAR) -> str:
     lines = ["# Judge calibration", ""]
     lines.append(
         f"Judge-vs-human agreement on a labeled hold-out (N={overall.n}). "
-        "Trust a judge dimension only once Cohen's κ ≥ 0.85 (METHODOLOGY.md §4)."
+        f"Trust a judge dimension only once Cohen's κ ≥ {bar:.2f} (METHODOLOGY.md §4)."
     )
     lines.append("")
     lines.append("| Scope | N | Accuracy | Cohen's κ | Sensitivity | Specificity |")
@@ -143,9 +188,9 @@ def render(overall: Calibration, per_dimension: dict) -> str:
         f"TN={overall.tn} FN={overall.fn}."
     )
     verdict = (
-        "meets the κ ≥ 0.85 bar — the judge is trustworthy on this hold-out."
-        if overall.trustworthy
-        else "is BELOW the κ ≥ 0.85 bar — do not trust the judge score until this improves."
+        f"meets the κ ≥ {bar:.2f} bar — the judge is trustworthy on this hold-out."
+        if overall.trustworthy_at(bar)
+        else f"is BELOW the κ ≥ {bar:.2f} bar — do not trust the judge score until this improves."
     )
     lines.append(f"\nOverall agreement {verdict}")
     return "\n".join(lines)

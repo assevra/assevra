@@ -7,73 +7,100 @@ const GH = 'https://github.com/assevra/assevra';
 const PYPI = 'https://pypi.org/project/assevra/';
 const DOI = 'https://doi.org/10.5281/zenodo.21200852';
 const METHOD = 'https://github.com/assevra/assevra/blob/main/METHODOLOGY.md';
-const SECURITY = 'https://github.com/assevra/assevra/blob/main/SECURITY.md';
+const ROADMAP = 'https://github.com/assevra/assevra/blob/main/ROADMAP.md';
 const CHANGELOG = 'https://github.com/assevra/assevra/blob/main/CHANGELOG.md';
-const README = 'https://github.com/assevra/assevra/blob/main/README.md';
+const CASES = 'https://github.com/assevra/assevra/tree/main/examples/case-studies';
 const EXAMPLE = '/example-scorecard.html';
 
 const nav = [
-  { label: 'Capabilities', href: '#capabilities' },
+  { label: 'Why', href: '#why' },
   { label: 'How it works', href: '#pipeline' },
-  { label: 'Scorecard', href: '#scorecard' },
-  { label: 'Methodology', href: '#methodology' },
+  { label: 'What it measures', href: '#dimensions' },
+  { label: 'Integrations', href: '#integrations' },
+  { label: 'Docs', href: '/docs' },
 ];
 
 const badges = [
   'MIT licensed',
   'Python 3.10+',
   'zero-dependency core',
+  'runs fully offline',
   'DOI 10.5281/zenodo.21200852',
 ];
 
 const frameworks = ['EU AI Act', 'NIST AI RMF', 'ISO/IEC 42001', 'OWASP LLM Top 10'];
 
+const steps = [
+  {
+    n: '1',
+    cmd: 'pip install assevra',
+    label: 'Zero-dependency core. No account, no backend, nothing to log into.',
+  },
+  {
+    n: '2',
+    cmd: 'assevra demo',
+    label:
+      'A complete worked scorecard — HTML, JSON, Agent Card — with no clone, no API key and no network.',
+  },
+  {
+    n: '3',
+    cmd: 'assevra init --from traces.jsonl',
+    label:
+      'Detects your traces, framework and providers, then writes the config, a drafted dataset and a CI gate.',
+  },
+  {
+    n: '4',
+    cmd: 'assevra run --gate',
+    label: 'Scores, gates the build, and writes the artifact you attach to the release.',
+  },
+];
+
 const capabilities = [
   {
     title: 'A signed artifact, not a dashboard',
-    body: 'Emits a self-contained scorecard — Markdown, JSON, and styled HTML — you can commit, attach to a PR, or mail to a reviewer. Sign it with Ed25519 so anyone can verify it was produced by you and never altered.',
+    body: 'One self-contained file — Markdown, JSON, and styled HTML — that you commit to git, attach to a PR, or mail to a reviewer. Sign it with Ed25519 so anyone can verify it was produced by you and never altered.',
     tag: 'assevra sign · verify',
     icon: 'shield',
   },
   {
-    title: 'Honest error bars',
-    body: 'A bare "0.92" hides how few samples it came from. Every dimension carries a 95% Wilson confidence interval, so nobody over-reads a small-sample move — rigor the field is only starting to adopt.',
+    title: 'Honest error bars, on every number',
+    body: 'A bare "0.92" hides how few samples it came from. Every dimension carries its sample size and a 95% Wilson interval — and on a small dataset that width is the honest statement of what the number can support.',
     tag: '95% Wilson CI',
     icon: 'chart',
   },
   {
-    title: 'Start from your traces',
-    body: 'No blank-page JSONL. Point bootstrap at logs you already have — generic traces, OpenAI chat logs, or OpenTelemetry spans — and it drafts the dataset, leaving only the answer key for you.',
-    tag: 'assevra bootstrap',
-    icon: 'import',
+    title: 'Deterministic before judge',
+    body: 'You scan for a leaked SSN; you do not ask a model whether it leaked one. Seven of the nine dimensions are rules — so most runs are free, reproducible, and identical on every machine, including a fork with no secrets.',
+    tag: '7 of 9 need no model',
+    icon: 'rule',
   },
   {
-    title: 'Trustworthy judging',
-    body: "Score with a panel of models (a jury) and surface disagreement as a signal. Then calibrate proves the judge agrees with humans — Cohen's κ against a labeled hold-out, with a κ ≥ 0.85 bar.",
-    tag: '--judge-panel · calibrate',
-    icon: 'jury',
-  },
-  {
-    title: 'Catch silent regressions',
-    body: 'Track reliability over time and fail the build when a dimension drops — flagged only when a move falls outside the previous interval or crosses a threshold, so noise never triggers a false alarm.',
-    tag: '--history · --fail-on-regression',
+    title: 'Skipped is never passed',
+    body: 'A dimension whose engine was unavailable is reported as SKIPPED and does not gate. It is the semantic that stops a build staying green for three months after CI quietly lost its API key.',
+    tag: 'fails closed',
     icon: 'pulse',
   },
   {
-    title: 'Map to governance frameworks',
-    body: 'The attest command turns a scorecard into an Agent Card that maps your evidence to the EU AI Act, NIST AI RMF, ISO/IEC 42001, and OWASP LLM Top 10 — the artifact a procurement review is looking for.',
-    tag: 'assevra attest',
+    title: 'A published artifact contract',
+    body: 'The scorecard, Agent Card, calibration report and dataset row all have versioned JSON Schemas served from this domain. Within major version 1, fields are only ever added — never removed or repurposed.',
+    tag: 'schema/v1',
     icon: 'doc',
+  },
+  {
+    title: 'Any model vendor, or none',
+    body: 'Anthropic, OpenAI, Azure, Bedrock, Gemini — or any OpenAI-compatible local endpoint, with no third-party package and no data leaving the machine. A jury can span vendors, and disagreement is reported as signal.',
+    tag: '7 judge providers',
+    icon: 'jury',
   },
 ];
 
 const pipeline = [
-  { cmd: 'bootstrap', label: 'Draft a dataset from your existing traces' },
-  { cmd: 'score', label: 'Grade with a jury of models' },
-  { cmd: 'calibrate', label: 'Prove the judge agrees with humans (κ)' },
+  { cmd: 'bootstrap', label: 'Draft a dataset from traces you already have' },
+  { cmd: 'validate', label: 'LABELED / UNLABELED / INVALID — before scoring' },
+  { cmd: 'run', label: 'Score every dimension, with its interval' },
+  { cmd: 'calibrate', label: 'Prove the judge agrees with humans (κ ≥ 0.85)' },
   { cmd: 'sign', label: 'Seal the scorecard with Ed25519' },
-  { cmd: 'attest', label: 'Map evidence to governance frameworks' },
-  { cmd: 'CI gate', label: 'Fail the build on a regression' },
+  { cmd: 'attest', label: 'Map the evidence to governance frameworks' },
 ];
 
 const scorecard = [
@@ -88,39 +115,109 @@ const scorecard = [
   },
   { dim: 'PII-leak', mode: 'deterministic', score: '1.00', ci: '0.95–1.00', n: '72', thr: '1.00' },
   {
-    dim: 'Task-completion',
+    dim: 'Tool calls',
     mode: 'deterministic',
-    score: '0.96',
-    ci: '0.90–0.98',
-    n: '90',
-    thr: '0.90',
+    score: '0.98',
+    ci: '0.93–0.99',
+    n: '96',
+    thr: '0.95',
+  },
+  {
+    dim: 'Prompt injection',
+    mode: 'deterministic',
+    score: '1.00',
+    ci: '0.92–1.00',
+    n: '44',
+    thr: '1.00',
   },
 ];
 
 const dimensions = [
   {
-    name: 'Grounding / faithfulness',
+    name: 'Grounding',
     mode: 'llm-judge',
     q: 'Is every factual claim traceable to the provided context, or invented?',
-    bar: 'Pass rate ≥ 0.90',
+    bar: '≥ 0.90',
   },
   {
     name: 'Safety / refusal',
     mode: 'llm-judge',
-    q: 'Does the agent refuse what it must — and answer what it should?',
+    q: 'Does it refuse what it must — and answer what it should? Over-refusal is a failure too.',
     bar: '1.00 · zero tolerance',
   },
   {
     name: 'PII-leak',
     mode: 'deterministic',
-    q: 'Does personal data escape into an output? Zero tolerance on hard entities.',
+    q: 'Does personal data escape into an output, outside the field it was sanctioned to echo?',
     bar: '1.00 · zero tolerance',
   },
   {
     name: 'Task-completion',
     mode: 'deterministic',
     q: 'Are the facts a correct completion requires actually present?',
-    bar: 'Pass rate ≥ 0.90',
+    bar: '≥ 0.90',
+  },
+  {
+    name: 'Tool-call validation',
+    mode: 'deterministic',
+    q: 'Was every call well-formed, permitted, and complete — arguments, types, enums and all?',
+    bar: '≥ 0.95',
+  },
+  {
+    name: 'Action correctness',
+    mode: 'deterministic',
+    q: 'Did it do the right thing? A perfect refund call is still a catastrophe if it should have escalated.',
+    bar: '≥ 0.95',
+  },
+  {
+    name: 'Prompt injection',
+    mode: 'deterministic',
+    q: 'Did it resist instructions planted in retrieved content, tool output, or another agent?',
+    bar: '1.00 · zero tolerance',
+  },
+  {
+    name: 'Cost budget',
+    mode: 'deterministic',
+    q: 'Did each run stay inside its cost budget? Priced from your table, not guessed.',
+    bar: '≥ 0.95',
+  },
+  {
+    name: 'Latency budget',
+    mode: 'deterministic',
+    q: 'Did each run finish in time? Reported as a pass rate with p50/p95, because averages hide the tail.',
+    bar: '≥ 0.95',
+  },
+];
+
+const integrations = [
+  { name: 'OpenTelemetry', note: 'OpenInference & OpenLLMetry spans' },
+  { name: 'LangGraph', note: 'state + tool calls' },
+  { name: 'Langfuse', note: 'observation export' },
+  { name: 'Arize Phoenix', note: 'OpenInference spans' },
+  { name: 'OpenAI Agents SDK', note: 'run traces' },
+  { name: 'Anthropic', note: 'Messages API logs' },
+];
+
+const providers = ['Anthropic', 'OpenAI', 'Azure', 'Bedrock', 'Gemini', 'Local / self-hosted'];
+
+const cases = [
+  {
+    title: 'RAG support assistant',
+    href: `${CASES}/rag-assistant`,
+    dims: 'grounding · injection · pii',
+    body: 'An indirect prompt injection arriving through a product review — nothing the user did wrong, and nothing input validation would have caught.',
+  },
+  {
+    title: 'Commerce agent with real tools',
+    href: `${CASES}/commerce-agent`,
+    dims: 'tool-call · action · cost · latency',
+    body: 'A malformed call and a wrong decision look identical in a trace and are completely different problems. Also: 41,000 tokens to answer “where is my order?”',
+  },
+  {
+    title: 'Multi-agent claims workflow',
+    href: `${CASES}/multi-agent-workflow`,
+    dims: 'pass^k · handoffs · agent-to-agent injection',
+    body: 'A dimension scoring 0.667 with consistency 0.000 is not a quality problem. It is an agent that never behaves the same way twice.',
   },
 ];
 
@@ -128,8 +225,8 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
 ---
 
 <BaseLayout
-  title="Assevra — the reliability scorecard for LLM agents"
-  description="Assevra turns agent outputs you've already captured into a portable, signed reliability scorecard — every number backed by a 95% confidence interval, runnable offline, ready to gate CI and stand up in an audit."
+  title="Assevra — release evidence for AI agents"
+  description="Assevra turns agent test runs into signed, statistically defensible scorecards that gate every release. Every number carries a 95% confidence interval. Runs offline, MIT licensed, no backend."
 >
   <!-- Header -->
   <header class="hdr">
@@ -149,7 +246,7 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
           >
           <span>Star</span>
         </a>
-        <a href="#install" class="btn btn-primary sm">Get started</a>
+        <a href="/docs" class="btn btn-primary sm">Read the docs</a>
       </div>
     </div>
   </header>
@@ -160,27 +257,29 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
       <div class="hero-glow" aria-hidden="true"></div>
       <div class="container hero-in">
         <div class="hero-copy">
-          <p class="eyebrow">Open source · a named reliability methodology</p>
+          <p class="eyebrow">Open source · release evidence for AI agents</p>
           <h1 class="hero-title">
             Trust your AI agents.<br /><span class="ht-accent">Let's prove it.</span>
           </h1>
           <p class="hero-sub">
-            Not another eval dashboard. Assevra turns agent outputs you've already captured into a
-            portable, <strong>signed reliability scorecard</strong> — every number backed by a 95% confidence
-            interval, runnable offline, ready to gate CI and stand up in an audit.
+            Assevra turns agent test runs into <strong
+              >signed, statistically defensible scorecards</strong
+            > that gate every release. Not a dashboard behind a login — one portable artifact you commit,
+            attach to a PR, and can still verify a year later.
           </p>
 
           <div class="install" id="install">
-            <code class="code" id="install-cmd">pip install assevra</code>
+            <code class="code" id="install-cmd">pip install assevra && assevra demo</code>
             <button type="button" class="copy" id="copy-btn" aria-label="Copy install command">
               Copy
             </button>
           </div>
+          <p class="install-note">
+            A complete worked scorecard in two commands — no clone, no API key, no network.
+          </p>
 
           <div class="hero-actions">
-            <a href={GH} class="btn btn-primary" target="_blank" rel="noopener noreferrer">
-              View on GitHub →
-            </a>
+            <a href="/docs/getting-started" class="btn btn-primary">Get started →</a>
             <a href={EXAMPLE} class="btn btn-ghost">See an example scorecard</a>
           </div>
 
@@ -190,7 +289,7 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
         </div>
 
         <!-- Embedded scorecard artifact -->
-        <div class="hero-visual" aria-hidden="false">
+        <div class="hero-visual">
           <div class="sc-card">
             <div class="sc-head">
               <div class="sc-title">
@@ -244,14 +343,15 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
       </div>
     </section>
 
-    <!-- Capabilities -->
-    <section class="section" id="capabilities">
+    <!-- Why -->
+    <section class="section" id="why">
       <div class="container">
-        <p class="eyebrow">What it does</p>
-        <h2 class="section-title">A full reliability toolkit, one command away</h2>
+        <p class="eyebrow">The difference</p>
+        <h2 class="section-title">Most eval tools ask “how good is my model?”</h2>
         <p class="section-lede">
-          From a labeled dataset to a signed, framework-mapped artifact — the whole arc of proving
-          an agent behaves, without a backend or a login.
+          Assevra asks the only question a release meeting cares about: <strong
+            >can I safely ship this agent?</strong
+          > Everything below follows from that one change of question.
         </p>
 
         <div class="cap-grid">
@@ -269,14 +369,40 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
       </div>
     </section>
 
+    <!-- Five minutes -->
+    <section class="section band" id="start">
+      <div class="container">
+        <p class="eyebrow">Five minutes</p>
+        <h2 class="section-title">Installed to gated, without reading a manual</h2>
+        <p class="section-lede">
+          The demo dataset ships inside the package, so the first artifact you see is real output
+          from the real engine — not a screenshot.
+        </p>
+
+        <ol class="steps">
+          {
+            steps.map((s) => (
+              <li class="step">
+                <span class="step-n mono">{s.n}</span>
+                <div>
+                  <code class="step-cmd mono">{s.cmd}</code>
+                  <p>{s.label}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+      </div>
+    </section>
+
     <!-- Pipeline -->
-    <section class="section band" id="pipeline">
+    <section class="section" id="pipeline">
       <div class="container">
         <p class="eyebrow">How it works</p>
-        <h2 class="section-title">From your traces to a signed, defensible artifact</h2>
+        <h2 class="section-title">From traces you already have to evidence you can defend</h2>
         <p class="section-lede">
-          Six commands, no backend. Each step is deterministic where it can be, judged where it must
-          be, and always reports the interval — not just the mean.
+          Six commands, no backend. Deterministic where it can be, judged where it must be, and
+          always reporting the interval — not just the mean.
         </p>
 
         <ol class="flow">
@@ -295,76 +421,14 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
       </div>
     </section>
 
-    <!-- Scorecard -->
-    <section class="section" id="scorecard">
-      <div class="container sc-split">
-        <div class="sc-intro">
-          <p class="eyebrow">The artifact</p>
-          <h2 class="section-title">A scorecard you can defend</h2>
-          <p class="section-lede">
-            Four independent dimensions, each scored against a fixed threshold with an interval and
-            a sample size. The verdict is a conjunction — one leak sinks the run.
-          </p>
-          <div class="sc-actions">
-            <a href={EXAMPLE} class="btn btn-ghost">Open the full rendered example →</a>
-          </div>
-        </div>
-
-        <div class="sc-card lg">
-          <div class="sc-head">
-            <div class="sc-title">
-              <span class="sc-dot" aria-hidden="true"></span>
-              Assevra Reliability Scorecard
-            </div>
-            <span class="sc-verdict">Overall · PASS</span>
-          </div>
-          <table class="sc-table">
-            <thead>
-              <tr>
-                <th>Dimension</th>
-                <th>Mode</th>
-                <th>Score</th>
-                <th class="hide-sm">95% CI</th>
-                <th class="hide-sm">n</th>
-                <th class="hide-sm">Thr.</th>
-                <th>Result</th>
-              </tr>
-            </thead>
-            <tbody>
-              {
-                scorecard.map((r) => (
-                  <tr>
-                    <td class="sc-dim">{r.dim}</td>
-                    <td class="mono sc-mode">{r.mode}</td>
-                    <td class="mono">{r.score}</td>
-                    <td class="mono hide-sm">{r.ci}</td>
-                    <td class="mono hide-sm">{r.n}</td>
-                    <td class="mono hide-sm">{r.thr}</td>
-                    <td>
-                      <span class="sc-pass">PASS</span>
-                    </td>
-                  </tr>
-                ))
-              }
-            </tbody>
-          </table>
-          <div class="sc-foot">
-            Illustrative example · every score carries its sample size and a 95% Wilson interval ·
-            signable with Ed25519.
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Methodology -->
-    <section class="section band" id="methodology">
+    <!-- Dimensions -->
+    <section class="section band" id="dimensions">
       <div class="container">
-        <p class="eyebrow">The methodology</p>
-        <h2 class="section-title">Four dimensions, defined and thresholded</h2>
+        <p class="eyebrow">What it measures</p>
+        <h2 class="section-title">Nine dimensions, each with a threshold and an interval</h2>
         <p class="section-lede">
-          Two principles run through all of it: <strong>deterministic before judge</strong>, and
-          <strong>report the interval, not just the mean</strong>. The full spec is public and
-          versioned.
+          The verdict is a conjunction — one leak sinks the run. Every dimension ships a definition,
+          a scoring method, a stated threshold, a confidence interval, and a stated limit.
         </p>
 
         <div class="dim-grid">
@@ -385,17 +449,115 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
         </div>
 
         <p class="dim-note">
-          Plus <strong>pass^k</strong> and run-to-run consistency over repeated trials — because a deployed
-          agent needs to work every time, not just once.
+          Plus <strong>pass^k</strong> and run-to-run consistency over repeated trials. A dimension scoring
+          0.667 with consistency 0.000 is not a quality problem — it is an agent that never behaves the
+          same way twice, and that needs a different fix.
         </p>
-        <a href={METHOD} class="link-arrow" target="_blank" rel="noopener noreferrer">
-          Read the specification →
-        </a>
+        <p class="dim-links">
+          <a href="/docs/dimensions" class="link-arrow">Every dimension in detail →</a>
+          <a href={METHOD} class="link-arrow" target="_blank" rel="noopener noreferrer">
+            Read the specification →
+          </a>
+        </p>
+      </div>
+    </section>
+
+    <!-- CI gate -->
+    <section class="section" id="ci">
+      <div class="container ci-split">
+        <div>
+          <p class="eyebrow">In your build</p>
+          <h2 class="section-title">Gate the release, not a dashboard</h2>
+          <p class="section-lede">
+            One step. It validates the dataset, scores it, writes a summary and the failing rows to
+            the job summary, uploads the artifacts, and fails the build when a dimension drops below
+            its threshold.
+          </p>
+          <p class="ci-note">
+            The <code class="mono">env:</code> block is optional. Without a key, the deterministic dimensions
+            still gate and the judged ones report as <strong>SKIPPED — never as passing</strong>.
+            That is what lets a pull request from a fork get a real signal instead of a red build.
+          </p>
+          <a href="/docs/ci" class="link-arrow">CI &amp; the GitHub Action →</a>
+        </div>
+
+        <pre
+          class="term ci-term"><span class="term-c">- uses:</span> assevra/assevra@v1
+  <span class="term-c">with:</span>
+    <span class="term-k">dataset:</span> evals/agent.jsonl
+    <span class="term-k">gate:</span> true
+    <span class="term-k">strict:</span> true
+    <span class="term-k">attest:</span> true
+  <span class="term-c">env:</span>
+    <span class="term-k">ANTHROPIC_API_KEY:</span> &#36;&#123;&#123; secrets.ANTHROPIC_API_KEY &#125;&#125;</pre>
+      </div>
+    </section>
+
+    <!-- Integrations -->
+    <section class="section band" id="integrations">
+      <div class="container">
+        <p class="eyebrow">Fits what you already run</p>
+        <h2 class="section-title">Assevra does not run your agent — it scores what you captured</h2>
+        <p class="section-lede">
+          That boundary is why it works with every framework instead of competing with them. One
+          command prints the wiring for the tool you already use.
+        </p>
+
+        <div class="integ-grid">
+          {
+            integrations.map((i) => (
+              <div class="integ">
+                <span class="integ-name">{i.name}</span>
+                <span class="integ-note mono">{i.note}</span>
+              </div>
+            ))
+          }
+        </div>
+
+        <div class="integ-split">
+          <pre class="term"><span class="term-prompt">$</span> assevra integrate langgraph</pre>
+          <div class="providers">
+            <p class="fw-label mono">Judge providers</p>
+            <ul>
+              {providers.map((p) => <li>{p}</li>)}
+            </ul>
+            <p class="providers-note">
+              A local OpenAI-compatible endpoint needs no third-party package and sends nothing off
+              the machine.
+            </p>
+          </div>
+        </div>
+        <a href="/docs/integrations" class="link-arrow">All integrations →</a>
+      </div>
+    </section>
+
+    <!-- Case studies -->
+    <section class="section" id="cases">
+      <div class="container">
+        <p class="eyebrow">Worked examples</p>
+        <h2 class="section-title">Three runnable before/after walkthroughs</h2>
+        <p class="section-lede">
+          A real agent, a scorecard that fails, the exact rows that failed, the fix, and the
+          scorecard that passes. Every number in them came from running the datasets in the repo.
+        </p>
+
+        <div class="case-grid">
+          {
+            cases.map((c) => (
+              <a class="card case" href={c.href} target="_blank" rel="noopener noreferrer">
+                <span class="case-dims mono">{c.dims}</span>
+                <h3>{c.title}</h3>
+                <p>{c.body}</p>
+                <span class="case-go">Open the walkthrough →</span>
+              </a>
+            ))
+          }
+        </div>
       </div>
     </section>
 
     <!-- Signing / verify -->
-    <section class="section">
+    <section class="section band">
       <div class="container sign-split">
         <div class="sign-copy">
           <p class="eyebrow">Verifiable evidence</p>
@@ -405,9 +567,7 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
             key to confirm a scorecard was produced by them and not altered — verification fails if
             a single byte changed.
           </p>
-          <a href={SECURITY} class="link-arrow" target="_blank" rel="noopener noreferrer">
-            Details in SECURITY.md →
-          </a>
+          <a href="/docs/security" class="link-arrow">Security &amp; signing →</a>
         </div>
 
         <div class="sign-box">
@@ -431,20 +591,17 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
           <h2 class="cta-title">Prove your agent behaves — and hand someone the receipt.</h2>
           <p>Install once, run offline, commit the artifact. No backend, no login, MIT-licensed.</p>
           <div class="hero-actions">
-            <a href={GH} class="btn btn-primary" target="_blank" rel="noopener noreferrer">
-              Get started on GitHub →
-            </a>
-            <a href={PYPI} class="btn btn-ghost" target="_blank" rel="noopener noreferrer">
-              View on PyPI
+            <a href="/docs/getting-started" class="btn btn-primary">Get started →</a>
+            <a href={GH} class="btn btn-ghost" target="_blank" rel="noopener noreferrer">
+              View on GitHub
             </a>
           </div>
         </div>
         <div class="cite card">
           <p class="cite-label eyebrow">Cite Assevra</p>
           <p class="cite-text">
-            Divi, Veera Ravindra, and Gullapalli, Sneha. <em
-              >Assevra: A Reliability Scorecard for LLM Agents</em
-            >, v0.3, 2026.
+            Divi, Veera Ravindra. <em>Assevra: A Reliability Scorecard for LLM Agents</em>, v0.4,
+            2026.
           </p>
           <a href={DOI} class="mono cite-doi" target="_blank" rel="noopener noreferrer">
             DOI 10.5281/zenodo.21200852
@@ -460,33 +617,37 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
       <div class="ftr-brand">
         <Image src={logo} alt="Assevra" widths={[170]} sizes="150px" class="ftr-logo" />
         <p>
-          An open reference implementation and named methodology for measuring the reliability of
-          LLM agents.
+          Release evidence for AI agents — an open reference implementation and named methodology
+          for measuring agent reliability.
         </p>
       </div>
-      <nav class="ftr-col" aria-label="Product">
-        <p class="ftr-h">Product</p>
-        <a href="#capabilities">Capabilities</a>
-        <a href={EXAMPLE}>Example scorecard</a>
-        <a href={PYPI} target="_blank" rel="noopener noreferrer">Install (PyPI)</a>
-      </nav>
       <nav class="ftr-col" aria-label="Docs">
         <p class="ftr-h">Docs</p>
-        <a href={README} target="_blank" rel="noopener noreferrer">Getting started</a>
+        <a href="/docs/getting-started">Getting started</a>
+        <a href="/docs/dimensions">Dimensions</a>
+        <a href="/docs/configuration">Configuration</a>
+        <a href="/docs/cli">CLI reference</a>
+        <a href="/docs/sdk">Python SDK</a>
+      </nav>
+      <nav class="ftr-col" aria-label="The artifact">
+        <p class="ftr-h">The artifact</p>
+        <a href={EXAMPLE}>Example scorecard</a>
+        <a href="/docs/schemas">JSON schemas</a>
+        <a href="/docs/security">Security &amp; signing</a>
+        <a href="/docs/governance">Governance mapping</a>
         <a href={METHOD} target="_blank" rel="noopener noreferrer">Methodology spec</a>
-        <a href={SECURITY} target="_blank" rel="noopener noreferrer">Verify &amp; security</a>
       </nav>
       <nav class="ftr-col" aria-label="Project">
         <p class="ftr-h">Project</p>
         <a href={GH} target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href={PYPI} target="_blank" rel="noopener noreferrer">PyPI</a>
+        <a href={ROADMAP} target="_blank" rel="noopener noreferrer">Roadmap</a>
         <a href={CHANGELOG} target="_blank" rel="noopener noreferrer">Changelog</a>
         <a href={DOI} target="_blank" rel="noopener noreferrer">Zenodo (DOI)</a>
       </nav>
     </div>
     <div class="container ftr-legal">
-      <p>
-        MIT licensed · an open-source research project by Veera Ravindra Divi and Sneha Gullapalli.
-      </p>
+      <p>MIT licensed · an open-source research project by Veera Ravindra Divi.</p>
       <p class="ftr-tag">Reliability claims are only as strong as what they honestly exclude.</p>
     </div>
   </footer>
@@ -495,7 +656,7 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
     const btn = document.getElementById('copy-btn');
     btn?.addEventListener('click', async () => {
       try {
-        await navigator.clipboard.writeText('pip install assevra');
+        await navigator.clipboard.writeText('pip install assevra && assevra demo');
         const prev = btn.textContent;
         btn.textContent = 'Copied';
         setTimeout(() => (btn.textContent = prev), 1600);
@@ -532,12 +693,12 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
   }
   .hdr-nav {
     display: flex;
-    gap: 1.6rem;
+    gap: 1.4rem;
   }
   .hdr-nav a {
     text-decoration: none;
     color: var(--text-muted);
-    font-size: 0.98rem;
+    font-size: 0.96rem;
     font-weight: 500;
     transition: color var(--dur);
   }
@@ -616,7 +777,7 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
   .hero-sub {
     color: var(--text-muted);
     font-size: 1.2rem;
-    max-width: 40ch;
+    max-width: 44ch;
     margin-top: 1.25rem;
   }
   .hero-sub strong {
@@ -632,13 +793,21 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
     border-radius: var(--radius);
     padding: 0.5rem 0.6rem 0.5rem 1rem;
     box-shadow: var(--shadow);
+    max-width: 100%;
+    overflow-x: auto;
   }
   .install .code {
-    font-size: 1rem;
+    font-size: 0.98rem;
+    white-space: nowrap;
   }
   .install .code::before {
     content: '$ ';
     color: color-mix(in srgb, #fff 55%, transparent);
+  }
+  .install-note {
+    margin: 0.7rem 0 0;
+    font-size: 0.9rem;
+    color: var(--text-muted);
   }
   .copy {
     font-size: 0.8rem;
@@ -649,6 +818,7 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
     border-radius: 0.45rem;
     padding: 0.35rem 0.7rem;
     cursor: pointer;
+    flex: none;
   }
   .hero-actions {
     display: flex;
@@ -669,7 +839,7 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
   .hero-visual {
     justify-self: center;
     width: 100%;
-    max-width: 520px;
+    max-width: 540px;
   }
   .sc-card {
     background: var(--surface);
@@ -677,9 +847,6 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-lg);
     overflow: hidden;
-  }
-  .sc-card.lg {
-    max-width: 640px;
   }
   .sc-head {
     display: flex;
@@ -739,7 +906,7 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
     text-align: right;
   }
   .sc-table td {
-    padding: 0.7rem 0.5rem;
+    padding: 0.62rem 0.5rem;
     border-bottom: 1px solid var(--border);
     vertical-align: middle;
   }
@@ -866,9 +1033,9 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 20V10M10 20V4M16 20v-8M4 20h16'/%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 20V10M10 20V4M16 20v-8M4 20h16'/%3E%3C/svg%3E");
   }
-  .icon-import::before {
-    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v12M8 11l4 4 4-4M4 21h16'/%3E%3C/svg%3E");
-    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v12M8 11l4 4 4-4M4 21h16'/%3E%3C/svg%3E");
+  .icon-rule::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h10M4 12h16M4 17h7'/%3E%3Cpath d='M17 7l2 2 3-3'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h10M4 12h16M4 17h7'/%3E%3Cpath d='M17 7l2 2 3-3'/%3E%3C/svg%3E");
   }
   .icon-jury::before {
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='7' cy='8' r='3'/%3E%3Ccircle cx='17' cy='8' r='3'/%3E%3Cpath d='M2 20c0-3 2.5-5 5-5s5 2 5 5M12 20c0-3 2.5-5 5-5s5 2 5 5'/%3E%3C/svg%3E");
@@ -883,6 +1050,49 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 2h8l4 4v16H6Z'/%3E%3Cpath d='M14 2v4h4M9 13h6M9 17h6'/%3E%3C/svg%3E");
   }
 
+  /* five-minute steps */
+  .steps {
+    list-style: none;
+    margin: 2.5rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr;
+  }
+  .step {
+    display: flex;
+    gap: 0.9rem;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.1rem 1.25rem;
+  }
+  .step-n {
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 999px;
+    background: var(--brand);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    flex: none;
+  }
+  .step-cmd {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 650;
+    color: var(--brand-ink);
+    word-break: break-word;
+  }
+  .step p {
+    color: var(--text-muted);
+    font-size: 0.94rem;
+    margin: 0.35rem 0 0;
+  }
+
   /* pipeline flow */
   .flow {
     list-style: none;
@@ -891,7 +1101,6 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
     display: grid;
     gap: 1rem;
     grid-template-columns: 1fr;
-    counter-reset: none;
   }
   .flow-step {
     background: var(--surface);
@@ -901,7 +1110,6 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    position: relative;
   }
   .flow-node {
     display: flex;
@@ -923,22 +1131,12 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
   .flow-cmd {
     font-weight: 700;
     color: var(--brand-ink);
-    font-size: 1rem;
+    font-size: 0.98rem;
   }
   .flow-label {
     color: var(--text-muted);
-    font-size: 0.92rem;
+    font-size: 0.9rem;
     margin: 0;
-  }
-
-  /* scorecard section */
-  .sc-split {
-    display: grid;
-    gap: 2.5rem;
-    align-items: center;
-  }
-  .sc-actions {
-    margin-top: 1.5rem;
   }
 
   /* methodology */
@@ -956,10 +1154,10 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
     margin-bottom: 0.5rem;
   }
   .dim-head h3 {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
   }
   .dim-mode {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 600;
     border-radius: 999px;
     padding: 0.2rem 0.6rem;
@@ -976,10 +1174,10 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
   .dim-q {
     color: var(--text-muted);
     margin: 0 0 1rem;
-    font-size: 0.98rem;
+    font-size: 0.94rem;
   }
   .dim-bar {
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     font-weight: 600;
     color: var(--text);
     border-top: 1px solid var(--border);
@@ -988,10 +1186,16 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
   .dim-note {
     margin-top: 2rem;
     color: var(--text-muted);
-    max-width: 62ch;
+    max-width: 68ch;
   }
   .dim-note strong {
     color: var(--text);
+  }
+  .dim-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-top: 0.5rem;
   }
   .link-arrow {
     display: inline-block;
@@ -1002,6 +1206,124 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
   }
   .link-arrow:hover {
     text-decoration: underline;
+  }
+
+  /* CI */
+  .ci-split {
+    display: grid;
+    gap: 2.5rem;
+    align-items: center;
+  }
+  .ci-note {
+    margin-top: 1.2rem;
+    color: var(--text-muted);
+    font-size: 0.98rem;
+    max-width: 58ch;
+  }
+  .ci-note strong {
+    color: var(--text);
+  }
+  .ci-note code {
+    font-size: 0.9em;
+  }
+  .ci-term {
+    font-size: 0.85rem;
+  }
+  .term-c {
+    color: #b9b4f5;
+  }
+  .term-k {
+    color: #8ee6c8;
+  }
+
+  /* integrations */
+  .integ-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: 1fr;
+    margin-top: 2.5rem;
+  }
+  .integ {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.9rem 1.1rem;
+  }
+  .integ-name {
+    font-weight: 650;
+    font-size: 0.98rem;
+  }
+  .integ-note {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .integ-split {
+    display: grid;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+    align-items: start;
+  }
+  .providers ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+    margin: 0.6rem 0 0;
+  }
+  .providers li {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--brand-ink);
+    background: var(--brand-soft);
+    border-radius: 999px;
+    padding: 0.28rem 0.75rem;
+  }
+  .providers-note {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    margin: 0.9rem 0 0;
+    max-width: 46ch;
+  }
+
+  /* case studies */
+  .case-grid {
+    display: grid;
+    gap: 1.1rem;
+    grid-template-columns: 1fr;
+    margin-top: 2.5rem;
+  }
+  .case {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    text-decoration: none;
+  }
+  .case h3 {
+    font-size: 1.1rem;
+  }
+  .case p {
+    color: var(--text-muted);
+    font-size: 0.96rem;
+    margin: 0;
+  }
+  .case-dims {
+    font-size: 0.74rem;
+    color: var(--brand-ink);
+    background: var(--brand-soft);
+    border-radius: 0.4rem;
+    padding: 0.22rem 0.55rem;
+    align-self: flex-start;
+  }
+  .case-go {
+    margin-top: auto;
+    padding-top: 0.6rem;
+    color: var(--brand);
+    font-weight: 600;
+    font-size: 0.92rem;
   }
 
   /* signing */
@@ -1145,7 +1467,18 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
     font-style: italic;
   }
 
-  /* hide-sm columns on very small screens */
+  @media (max-width: 560px) {
+    /* Keep the Copy button reachable on a phone: let the command wrap rather
+       than pushing the button off the edge of a horizontally-scrolling strip. */
+    .install {
+      flex-wrap: wrap;
+      overflow-x: visible;
+    }
+    .install .code {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+  }
   @media (max-width: 480px) {
     .sc-table .hide-sm {
       display: none;
@@ -1153,43 +1486,50 @@ const SIGNING_KEY = 'dEcTKT/9ThXewTjRdBm2qyGIH69Ghy08kVuB19AJnSg=';
   }
 
   /* ---------- responsive ---------- */
-  @media (max-width: 900px) {
+  @media (max-width: 1040px) {
     .hdr-nav {
       display: none;
     }
   }
   @media (min-width: 720px) {
-    .cap-grid {
+    .cap-grid,
+    .dim-grid,
+    .case-grid {
       grid-template-columns: repeat(2, 1fr);
     }
-    .dim-grid {
+    .flow,
+    .steps {
       grid-template-columns: repeat(2, 1fr);
     }
-    .flow {
+    .integ-grid {
       grid-template-columns: repeat(3, 1fr);
     }
   }
   @media (min-width: 960px) {
     .hero-in {
-      grid-template-columns: 1.15fr 0.85fr;
+      grid-template-columns: 1.05fr 0.95fr;
     }
-    .sc-split {
-      grid-template-columns: 0.9fr 1.1fr;
-    }
-    .sign-split {
+    .sign-split,
+    .ci-split,
+    .integ-split {
       grid-template-columns: 1fr 1fr;
     }
     .cta-in {
       grid-template-columns: 1.3fr 0.7fr;
     }
-    .cap-grid {
+    .cap-grid,
+    .dim-grid,
+    .case-grid {
       grid-template-columns: repeat(3, 1fr);
     }
     .flow {
       grid-template-columns: repeat(6, 1fr);
     }
+    .steps {
+      grid-template-columns: repeat(4, 1fr);
+    }
     .ftr-in {
-      grid-template-columns: 2fr 1fr 1fr 1fr;
+      grid-template-columns: 1.6fr 1fr 1fr 1fr;
     }
   }
 </style>

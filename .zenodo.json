@@ -1,6 +1,6 @@
 {
   "title": "Assevra: A Reliability Scorecard for LLM Agents",
-  "description": "Assevra is an open-source toolkit and methodology for measuring the reliability of large language model (LLM) agents. It scores an agent on four dimensions - grounding, safety/refusal, PII leakage, and task completion - each against a fixed threshold with a 95% Wilson confidence interval, and issues a reproducible reliability scorecard as Markdown, JSON, and a self-contained HTML report. Deterministic dimensions run offline; LLM-as-a-judge dimensions use a pinned model and are skipped, not failed, when unavailable. This is the reference implementation of the Assevra Reliability Scorecard methodology.",
+  "description": "Assevra turns agent test runs into signed, statistically defensible scorecards that gate every release. It scores a large language model (LLM) agent on nine dimensions - grounding, safety/refusal, PII leakage, task completion, tool-call validation, action correctness, prompt-injection resistance, cost, and latency - each against a stated threshold with a 95% Wilson confidence interval reported next to its sample size, and issues a reproducible artifact as Markdown, JSON, and a self-contained HTML report. Seven of the nine dimensions are deterministic and run entirely offline; LLM-as-a-judge dimensions use a pinned, hashed rubric, require calibration against human labels (Cohen's kappa) before their scores are trusted, and are skipped - never counted as passing - when unavailable. Scorecards can be signed with Ed25519 and mapped to the control families of the EU AI Act, NIST AI RMF, ISO/IEC 42001, and the OWASP Top 10 for LLM Applications. The artifact JSON is governed by published, independently versioned schemas. This is the reference implementation of the Assevra Reliability Scorecard methodology.",
   "upload_type": "software",
   "access_right": "open",
   "license": "MIT",
@@ -16,6 +16,10 @@
     "benchmark",
     "PII detection",
     "AI safety",
+    "prompt injection",
+    "release engineering",
+    "continuous integration",
+    "AI governance",
     "software engineering"
   ]
 }

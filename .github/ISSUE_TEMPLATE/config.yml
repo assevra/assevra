@@ -1,8 +1,17 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Questions & show-and-tell
+    url: https://github.com/assevra/assevra/discussions
+    about: How should I model this failure? Is this threshold sane? What can I claim from this number?
+  - name: Documentation
+    url: https://assevra.ai/docs
+    about: Getting started, configuration, CLI, SDK, integrations, and troubleshooting.
   - name: Methodology & specification
     url: https://github.com/assevra/assevra/blob/main/METHODOLOGY.md
-    about: How the scorecard is defined — read this before proposing a new scorer.
-  - name: Project home & example scorecard
-    url: https://assevra.ai
-    about: What Assevra is, with a rendered example scorecard.
+    about: How each dimension is defined — and what it does not measure. Read before proposing a new scorer.
+  - name: Roadmap
+    url: https://github.com/assevra/assevra/blob/main/ROADMAP.md
+    about: What is planned, what is deliberately not, and how to influence it.
+  - name: Report a security vulnerability
+    url: https://github.com/assevra/assevra/security/advisories/new
+    about: Privately, never in a public issue. See SECURITY.md.

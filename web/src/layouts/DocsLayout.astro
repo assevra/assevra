@@ -1,0 +1,376 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import { NAV, GH } from '../data/docs-nav';
+
+interface DocsMeta {
+  title?: string;
+  description?: string;
+  eyebrow?: string;
+}
+
+// Markdown pages arrive with their YAML front matter under `frontmatter`;
+// .astro pages can pass the same fields directly.
+interface Props extends DocsMeta {
+  frontmatter?: DocsMeta;
+}
+
+const fm: DocsMeta = Astro.props.frontmatter ?? {};
+const title = Astro.props.title ?? fm.title ?? 'Documentation';
+const description = Astro.props.description ?? fm.description ?? '';
+const eyebrow = Astro.props.eyebrow ?? fm.eyebrow ?? 'Docs';
+
+const here = Astro.url.pathname.replace(/\/$/, '') || '/docs';
+const flat = NAV.flatMap((section) => section.items);
+const index = flat.findIndex((item) => item.href.replace(/\/$/, '') === here);
+const prev = index > 0 ? flat[index - 1] : null;
+const next = index >= 0 && index < flat.length - 1 ? flat[index + 1] : null;
+
+const editPath = here === '/docs' ? 'index' : here.replace('/docs/', '');
+const editUrl = `${GH}/edit/main/web/src/pages/docs/${editPath}.md`;
+---
+
+<BaseLayout title={`${title} · Assevra docs`} description={description}>
+  <a href="/" class="docs-home" aria-label="Assevra home">
+    <span class="mark" aria-hidden="true"></span>
+    <span>Assevra</span>
+    <span class="tag">docs</span>
+  </a>
+
+  <div class="docs">
+    <nav class="sidebar" aria-label="Documentation">
+      {
+        NAV.map((section) => (
+          <div class="nav-group">
+            <p class="nav-title">{section.title}</p>
+            <ul>
+              {section.items.map((item) => (
+                <li>
+                  <a
+                    href={item.href}
+                    aria-current={item.href.replace(/\/$/, '') === here ? 'page' : undefined}
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+      <div class="nav-group">
+        <p class="nav-title">Elsewhere</p>
+        <ul>
+          <li><a href={GH} target="_blank" rel="noopener noreferrer">GitHub ↗</a></li>
+          <li>
+            <a href="https://pypi.org/project/assevra/" target="_blank" rel="noopener noreferrer"
+              >PyPI ↗</a
+            >
+          </li>
+          <li><a href="/example-scorecard.html">Example scorecard ↗</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <main id="main" class="content">
+      <p class="eyebrow">{eyebrow}</p>
+      <h1>{title}</h1>
+      {description && <p class="lede">{description}</p>}
+      <article class="prose">
+        <slot />
+      </article>
+
+      <nav class="pager" aria-label="Pagination">
+        {
+          prev ? (
+            <a href={prev.href} class="pager-link prev">
+              <span>Previous</span>
+              <strong>{prev.label}</strong>
+            </a>
+          ) : (
+            <span />
+          )
+        }
+        {
+          next && (
+            <a href={next.href} class="pager-link next">
+              <span>Next</span>
+              <strong>{next.label}</strong>
+            </a>
+          )
+        }
+      </nav>
+
+      <p class="edit">
+        Something wrong or missing on this page?
+        <a href={editUrl} target="_blank" rel="noopener noreferrer">Edit it on GitHub</a>.
+      </p>
+    </main>
+  </div>
+</BaseLayout>
+
+<style>
+  .docs-home {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.85rem 1.5rem;
+    font-weight: 700;
+    text-decoration: none;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: saturate(1.4) blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .docs-home .mark {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  }
+  .docs-home .tag {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--brand-ink);
+    background: var(--brand-soft);
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+  }
+
+  .docs {
+    max-width: var(--width-content);
+    margin-inline: auto;
+    padding: 0 1.5rem 4rem;
+    display: grid;
+    gap: 2.5rem;
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    padding-top: 2rem;
+  }
+  .nav-group + .nav-group {
+    margin-top: 1.5rem;
+  }
+  .nav-title {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--text-muted);
+    margin: 0 0 0.5rem;
+  }
+  .sidebar ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+  .sidebar a {
+    display: block;
+    padding: 0.32rem 0.6rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.94rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+  }
+  .sidebar a:hover {
+    color: var(--brand);
+    background: var(--brand-soft);
+  }
+  .sidebar a[aria-current='page'] {
+    color: var(--brand-ink);
+    font-weight: 650;
+    background: var(--brand-soft);
+    border-left-color: var(--brand);
+  }
+
+  .content {
+    padding-top: 2rem;
+    min-width: 0;
+  }
+  .content h1 {
+    font-size: clamp(1.9rem, 1.4rem + 2vw, 2.6rem);
+    margin-top: 0.5rem;
+  }
+  .lede {
+    color: var(--text-muted);
+    font-size: 1.15rem;
+    margin: 1rem 0 0;
+    max-width: 62ch;
+  }
+
+  .pager {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 3.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  .pager-link {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    text-decoration: none;
+    padding: 0.8rem 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    max-width: 48%;
+  }
+  .pager-link:hover {
+    border-color: var(--brand);
+  }
+  .pager-link.next {
+    text-align: right;
+    margin-left: auto;
+  }
+  .pager-link span {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .pager-link strong {
+    color: var(--brand-ink);
+  }
+
+  .edit {
+    margin-top: 2rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  .edit a {
+    color: var(--brand);
+  }
+
+  @media (min-width: 900px) {
+    .docs {
+      grid-template-columns: 15rem minmax(0, 1fr);
+      gap: 3.5rem;
+    }
+    .sidebar {
+      position: sticky;
+      top: 3.4rem;
+      align-self: start;
+      max-height: calc(100vh - 4rem);
+      overflow-y: auto;
+      padding-bottom: 2rem;
+    }
+  }
+</style>
+
+<style is:global>
+  /* Prose styles for the Markdown docs pages. */
+  .prose {
+    margin-top: 2rem;
+    max-width: 74ch;
+  }
+  .prose > * + * {
+    margin-top: 1.1rem;
+  }
+  .prose h2 {
+    font-size: 1.5rem;
+    margin-top: 2.8rem;
+    padding-top: 0.4rem;
+    scroll-margin-top: 5rem;
+  }
+  .prose h3 {
+    font-size: 1.15rem;
+    margin-top: 2rem;
+    scroll-margin-top: 5rem;
+  }
+  .prose h4 {
+    font-size: 1rem;
+    margin-top: 1.6rem;
+  }
+  .prose p,
+  .prose li {
+    color: var(--text);
+  }
+  .prose a {
+    color: var(--brand);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .prose ul,
+  .prose ol {
+    padding-left: 1.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .prose li > ul,
+  .prose li > ol {
+    margin-top: 0.4rem;
+  }
+  .prose code {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 0.35rem;
+    padding: 0.08em 0.35em;
+  }
+  .prose pre {
+    background: #14162e;
+    color: #e9e8fb;
+    border-radius: var(--radius);
+    padding: 1.05rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .prose pre code {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    font-size: inherit;
+  }
+  .prose blockquote {
+    border-left: 3px solid var(--brand);
+    background: var(--brand-soft);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 0.9rem 1.1rem;
+    color: var(--brand-ink);
+  }
+  .prose blockquote > * + * {
+    margin-top: 0.6rem;
+  }
+  .prose table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+    display: block;
+    overflow-x: auto;
+  }
+  .prose th,
+  .prose td {
+    text-align: left;
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .prose th {
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  .prose hr {
+    border: 0;
+    border-top: 1px solid var(--border);
+    margin-block: 2.5rem;
+  }
+  .prose strong {
+    font-weight: 650;
+  }
+</style>

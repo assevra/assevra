@@ -221,8 +221,9 @@ def verify_scorecard(
     try:
         pub_key = _load_public_key_b64(pub_b64)
         sig = base64.b64decode(signature_block["signature"], validate=True)
+        # Raises on any mismatch; reaching the next line means the signature is
+        # good over the payload.
         pub_key.verify(sig, canonical_bytes(payload))
-        signature_valid = True
     except Exception:  # fail closed on any verification error
         return VerifyResult(
             False,

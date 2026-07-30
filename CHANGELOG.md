@@ -4,9 +4,100 @@ All notable changes to Assevra are recorded here. The project follows
 semantic-ish versioning; the reported "measured with Assevra vX.Y" number is
 bumped whenever a scorer or rubric change could change a reported score.
 
-## [Unreleased]
+## [0.4.0] — 2026-07-29
+
+The adoption release. 0.1–0.3 were about making the *measurement* honest; 0.4 is
+about making it something a team can actually adopt on a Tuesday afternoon. The
+guiding sequence: schema validation → correct dataset semantics → complete CI →
+configuration → init wizard → high-level SDK → GitHub Action → official
+integrations → public case studies.
+
+### Added
+
+- **`assevra demo`** — a complete worked scorecard in one command, with **no
+  clone, no API key and no network**. The demo dataset ships inside the wheel and
+  covers all nine dimensions plus repeated trials; the command writes the HTML
+  report, the JSON scorecard, the Markdown summary, the Agent Card, the dataset it
+  scored, and the `.assevra.yml` that produced all of it.
+- **`.assevra.yml` project configuration.** Dataset, out-dir, judge, gate,
+  thresholds, budgets, history, signing, reports and calibration all live in one
+  reviewable file, so `assevra run` needs no flags and every machine runs the same
+  evaluation. Precedence is defaults < file < environment < flags; unknown keys
+  are **reported, never silently dropped**. The parser is dependency-free (PyYAML
+  is used when present, never required), and `--config none` ignores any project
+  config.
+- **`assevra validate`** — the gate that runs *before* evaluation. Every row is
+  classified **LABELED / UNLABELED / INVALID** with a stable error code and a
+  suggested fix. `run` calls the same check first, so a broken dataset fails in a
+  second instead of producing a confident, meaningless report. `--strict` treats
+  an unlabeled row (a *vacuous pass*) as a failure.
+- **`assevra init`** — detects candidate trace files (ranked by how much it could
+  actually extract), your agent framework, and which judge providers have
+  credentials; then writes `.assevra.yml`, a drafted dataset, a GitHub Actions
+  workflow, and an `EVALUATION.md`. Nothing is overwritten without `--force`;
+  `--dry-run` shows the plan.
+- **Published artifact contracts.** Five JSON Schemas — `scorecard`,
+  `agent-card`, `calibration`, `dataset`, `validation` — versioned independently
+  of the package, shipped inside the wheel, and served from
+  `https://assevra.ai/schema/v1/`. Every emitted artifact carries `$schema` and
+  `schema_version`. **Within major version 1, fields are only ever added — never
+  removed, renamed, or repurposed.** `assevra schema` prints or exports them.
+- **Python SDK.** `from assevra import evaluate` scores records in memory —
+  notebooks, pytest, the harness that just ran the agent. Validation runs first
+  and an invalid dataset raises. Plus registries for **scorers, reporters, trace
+  adapters and judge providers**, so a team's domain metric becomes a first-class
+  dimension (appearing in the scorecard, the validator, the config and the gate)
+  rather than a fork.
+- **Judge-provider abstraction.** Anthropic, OpenAI, Azure, Bedrock, Gemini, any
+  OpenAI-compatible **local** endpoint (Ollama, vLLM, LM Studio — over `urllib`,
+  with no third-party package and no data leaving the machine), and a
+  deterministic offline **mock**. `auto` selects the first provider with
+  credentials and never selects `mock`. Panels may span vendors
+  (`anthropic:claude-opus-4-8,openai:gpt-4o`).
+- **Five new dimensions**, chosen for how agents actually fail in production:
+  - `tool_call` — were the calls well-formed and permitted? Parses raw JSON
+    argument strings (truncated blobs are a first-class finding), enforces
+    allow/deny lists, required arguments, types and enums.
+  - `action_correctness` — did it do the right thing? Ordered / exact / set
+    matching, with forbidden actions failing a row even when the expected ones
+    happened. Reads actions from `tool_calls` when not recorded explicitly.
+  - `injection` — prompt-injection resistance, deterministically, via a **canary**
+    string; escalates to a judge only for rows with no canary, and is skipped —
+    never passed — when neither is available.
+  - `cost` — priced from `cost_usd` or from token `usage` with a configured price
+    table, against a per-row or project budget. Notes report total, mean and p95.
+  - `latency` — a pass rate against a budget, with p50/p95/max in the notes,
+    because averages hide the tail.
+- **A GitHub Action** (`uses: assevra/assevra@v1`). Installs, validates, scores,
+  gates, writes a summary table and the failing rows to the **job summary**, and
+  uploads the artifacts. Outputs `passed`, `scorecard`, `html`, `summary`. Works
+  with no key: judged dimensions report as SKIPPED, so forks get a real gate
+  instead of a red build.
+- **`assevra integrate`** — the wiring for OpenTelemetry, LangGraph, Langfuse,
+  Arize Phoenix, the OpenAI Agents SDK, and Anthropic Messages, printed as capture
+  snippet, export command and the exact `bootstrap` invocation.
+- **A real CI pipeline** (`ci.yml`): Python 3.10–3.13 matrix, a check that the
+  core imports with no third-party packages, unit tests, CLI integration tests,
+  the **judged path exercised offline via the mock provider**, calibration,
+  package build + `twine check`, a clean-venv **wheel install smoke test**, JSON
+  Schema validation of every artifact, a served-schemas-match-packaged-schemas
+  check, an HTML self-containment check, a **golden snapshot** (`tests/snapshot.py`),
+  and the project gating itself on its own scorer.
+- **Three runnable case studies** under `examples/case-studies/` — RAG assistant,
+  commerce agent, multi-agent workflow — each with a failing `before.jsonl`, a
+  passing `after.jsonl`, the config, and a write-up that states what the result
+  does *not* prove. Every number quoted was produced by running them.
+- **A documentation site** at [assevra.ai/docs](https://assevra.ai/docs): getting
+  started, concepts, dimensions, methodology, calibration, configuration, CLI,
+  SDK, integrations, CI, schemas, security, governance, FAQ, troubleshooting.
+- **Community and governance files**: `GOVERNANCE.md` (including the bar a
+  methodology change must clear), `ROADMAP.md`, `CODE_OF_CONDUCT.md`,
+  `SUPPORT.md`, a pull-request template, and a "new dimension" issue template.
 
 ### Changed
+
+- **Positioning.** Assevra is *release evidence for AI agents*. The artifact — not
+  the CLI — is the product, and the schemas are versioned as such.
 - **Richer HTML scorecard.** The generated report is redesigned to match the
   project site: a gradient header with the mark and verdict pill, an at-a-glance
   stat strip (dimensions passed / rows scored / skipped), and — per dimension — a
@@ -16,6 +107,30 @@ bumped whenever a scorer or rubric change could change a reported score.
   summary, and a footer prompts signing for a verifiable artifact. Purely a
   rendering change — the scorecard JSON (and thus any signature) is unaffected.
   The bundled `docs/example-scorecard.html` is regenerated as a full example.
+- **Scorecard JSON gains provenance fields** (additive, schema-compatible):
+  `$schema`, `schema_version`, `generated_at`, `dataset_sha256`, and
+  `judge_provider`. Because the signature covers the scorecard's content, a
+  scorecard produced by 0.4 has a different content hash than the same run under
+  0.3 — re-sign rather than re-using an old signature.
+- **Scorer signature** is now `score(rows, judge=None, options=None)`. Custom
+  scorers written against 0.3 need the extra optional parameter.
+- **`assevra history`** and **`assevra calibrate`** read their paths and settings
+  from `.assevra.yml` when not passed explicitly. `calibrate` gained `--out` to
+  write the calibration artifact, and its κ bar is configurable.
+- **Exit codes are now explicit and documented**: 0 success, 1 gate failed, 2 the
+  command could not run.
+- **Extras split by vendor** — `[anthropic]`, `[openai]`, `[azure]`, `[bedrock]`,
+  `[gemini]` — so you install only the SDK you use. `[judge]` is kept as an alias
+  for the pre-0.4 name.
+- The `eval-gate` workflow now runs through the published composite action, so the
+  action itself is exercised on every pull request.
+
+### Notes on comparability
+
+Existing dimensions score identically to 0.3 — no rubric, threshold, or detector
+was changed, and `tests/snapshots/golden.json` pins that. `ASSEVRA_VERSION` moves
+to `0.4` because the artifact gained fields and five new dimensions can now
+appear in a report.
 
 ## [0.3.0] — 2026-07-05
 

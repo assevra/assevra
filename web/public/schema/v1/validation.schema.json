@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://assevra.ai/schema/v1/validation.schema.json",
+  "title": "Assevra dataset validation report",
+  "description": "Output of `assevra validate`. Every row lands in exactly one state: LABELED (has a usable answer key), UNLABELED (parses, but nothing to verify — it would score as a vacuous pass), or INVALID (structurally unusable; evaluation must not proceed).",
+  "type": "object",
+  "required": ["schema_version", "assevra_version", "dataset", "ok", "counts", "rows"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": { "type": "string" },
+    "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+    "assevra_version": { "type": "string" },
+    "generated_at": { "type": ["string", "null"] },
+    "dataset": { "type": "string" },
+    "dataset_sha256": { "type": ["string", "null"] },
+    "strict": {
+      "type": "boolean",
+      "description": "When true, UNLABELED rows also fail validation."
+    },
+    "ok": {
+      "type": "boolean",
+      "description": "False when any row is INVALID (or, in strict mode, UNLABELED)."
+    },
+    "counts": {
+      "type": "object",
+      "required": ["total", "labeled", "unlabeled", "invalid"],
+      "additionalProperties": true,
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "labeled": { "type": "integer", "minimum": 0 },
+        "unlabeled": { "type": "integer", "minimum": 0 },
+        "invalid": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "by_dimension": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["line", "id", "state"],
+        "additionalProperties": true,
+        "properties": {
+          "line": { "type": "integer", "minimum": 1 },
+          "id": { "type": "string" },
+          "dimension": { "type": ["string", "null"] },
+          "state": { "type": "string", "enum": ["LABELED", "UNLABELED", "INVALID"] },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["level", "code", "message"],
+              "additionalProperties": true,
+              "properties": {
+                "level": { "type": "string", "enum": ["error", "warning"] },
+                "code": {
+                  "type": "string",
+                  "description": "Stable machine-readable code, e.g. unknown_dimension, missing_answer_key."
+                },
+                "message": { "type": "string" },
+                "field": { "type": ["string", "null"] },
+                "fix": { "type": ["string", "null"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

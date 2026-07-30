@@ -9,17 +9,28 @@ dist/
 venv/
 .env
 
-# Assevra run artifacts (regenerate with `python -m assevra run`)
+# Assevra run artifacts (regenerate with `assevra run` or `assevra demo`)
+.assevra/
+assevra-demo/
 scorecard.json
 scorecard.md
 scorecard.html
+scorecard.sig.json
+agent-card.md
+agent-card.json
 scorecard-preview.png
-!examples/sample-scorecard.md
+!examples/**
+!docs/example-scorecard.html
+!web/public/example-scorecard.html
 
 # Signing keys — never commit a private key
 *.pem
 assevra_ed25519_private*
-assevra_ed25519_public*
+
+# Node / Astro (the site lives in web/)
+node_modules/
+web/dist/
+web/.astro/
 
 # Editors / OS
 .vscode/

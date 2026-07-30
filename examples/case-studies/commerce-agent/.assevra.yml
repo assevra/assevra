@@ -1,0 +1,32 @@
+# Case study 2 — a commerce support agent with real tool access.
+#
+# Every dimension here is deterministic, so this walkthrough needs no judge at
+# all: each verdict is a rule, reproducible byte-for-byte on any machine.
+version: 1
+
+dataset: before.jsonl
+out_dir: out/before
+
+judge:
+  # Nothing here needs judgment. That is what "deterministic before judge" buys.
+  provider: none
+
+gate:
+  enabled: true
+
+validate:
+  on_run: true
+  strict: true
+
+thresholds:
+  # Destructive tools raise the bar. A malformed call that moves money is not a
+  # rounding error, so this project runs at 1.00 rather than the 0.95 default.
+  tool_call: 1.00
+  action_correctness: 1.00
+  cost: 1.00
+  latency: 1.00
+
+budgets:
+  price:
+    input_per_mtok: 3.0
+    output_per_mtok: 15.0

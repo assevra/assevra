@@ -1,14 +1,23 @@
 # Gate your CI on an Assevra scorecard.
 #
-# Drop this file into `.github/workflows/` of your own repo and point
-# `--dataset` at your labeled dataset. The build fails whenever your agent's
-# scorecard drops below its thresholds, so a regression can't merge.
+# Drop this into `.github/workflows/` of your own repo. The build fails whenever
+# your agent's scorecard drops below its thresholds, so a regression cannot merge.
 #
 # What runs, and when:
-#   - Deterministic dimensions (PII, task-completion) always run -- no API key.
-#   - LLM-as-judge dimensions (grounding, safety) run only if you provide an
-#     ANTHROPIC_API_KEY secret; without it they are skipped, not failed, so this
-#     still works on forks and key-less repos.
+#   - The deterministic dimensions (PII, task-completion, tool-call, action,
+#     injection, cost, latency) always run — no API key, no network.
+#   - The judged dimensions (grounding, safety) run only when a provider key is
+#     configured. Without one they are reported as SKIPPED — never as passing —
+#     which is what lets a pull request from a fork get a real gate instead of a
+#     red build.
+#
+# The shortest version of this whole file is the composite action:
+#
+#   - uses: assevra/assevra@v1
+#     with: { dataset: evals/agent.jsonl, gate: true }
+#
+# The long form below is here for when you want to see every step, or are not on
+# GitHub Actions.
 
 name: assevra-gate
 
@@ -21,41 +30,59 @@ jobs:
   assevra-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Optional. Empty on forks by design.
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install Assevra
         run: |
           python -m pip install --upgrade pip
-          # Core is enough for the deterministic gate. For the full PII detector
-          # (Microsoft Presidio), use:  pip install "assevra[pii]"
+          # The core is enough for the deterministic gate. For the full PII
+          # detector (Microsoft Presidio), use:  pip install "assevra[pii]"
           pip install assevra
 
-      # Uncomment to enable the LLM-as-judge dimensions (grounding, safety).
-      # Requires the ANTHROPIC_API_KEY secret set below.
-      # - name: Install the judge extra
-      #   run: pip install "assevra[judge]"
+      - name: Install the judge SDK when a key is configured
+        if: env.ANTHROPIC_API_KEY != ''
+        run: pip install "assevra[anthropic]"
 
-      - name: Run the Assevra scorecard (gates the build)
-        # --gate exits non-zero when any scored dimension is below its threshold,
-        # failing the job. Point --dataset at your own .jsonl.
-        env:
-          # Optional: set this repo secret to enable the judge dimensions.
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: assevra run --dataset path/to/your_dataset.jsonl --gate
+      # Keep the history across runs so a regression is measured against a real
+      # baseline rather than a vibe.
+      - uses: actions/cache@v4
+        with:
+          path: .assevra/history.jsonl
+          key: assevra-history-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: assevra-history-${{ github.ref_name }}-
+
+      - name: Validate the dataset before scoring it
+        # Exits non-zero if any row is structurally unusable. --strict also fails
+        # on a row with no answer key, which would otherwise pass vacuously.
+        run: assevra validate evals/agent.jsonl --strict
+
+      - name: Score the agent and gate the build
+        # --gate exits non-zero when any scored dimension is below its threshold.
+        # Everything else can live in .assevra.yml instead of these flags.
+        run: |
+          assevra run \
+            --dataset evals/agent.jsonl \
+            --out-dir .assevra/out \
+            --gate \
+            --attest \
+            --history .assevra/history.jsonl \
+            --label "${{ github.sha }}" \
+            --fail-on-regression
 
       - name: Upload the scorecard
-        # `always()` so you still get the report on a failing gate.
+        # `always()` so you still get the report on a failing gate — a red build
+        # is exactly when someone needs to open it.
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: assevra-scorecard
-          path: |
-            scorecard.html
-            scorecard.md
-            scorecard.json
+          path: .assevra/out/
           if-no-files-found: warn

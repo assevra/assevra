@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://assevra.ai/schema/v1/agent-card.schema.json",
+  "title": "Assevra Agent Card",
+  "description": "Measured reliability evidence mapped to AI-governance control families. An Agent Card is evidence and due-care documentation — NOT a certification, a conformity determination, or legal advice.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "agent_card_version",
+    "assevra_version",
+    "overall_pass",
+    "frameworks",
+    "dimensions",
+    "disclaimer"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": { "type": "string" },
+    "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+    "agent_card_version": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "assevra_version": { "type": ["string", "null"] },
+    "dataset": { "type": ["string", "null"] },
+    "overall_pass": { "type": ["boolean", "null"] },
+    "frameworks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Governance frameworks referenced by the mappings in this card."
+    },
+    "dimensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dimension", "measured", "skipped", "mappings"],
+        "additionalProperties": true,
+        "properties": {
+          "dimension": { "type": "string" },
+          "measured": {
+            "type": "string",
+            "description": "Human-readable statement of what was measured, including interval, n, threshold, and verdict."
+          },
+          "skipped": { "type": "boolean" },
+          "mappings": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/mapping" }
+          }
+        }
+      }
+    },
+    "reliability_mappings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/mapping" }
+    },
+    "signature": {
+      "type": "object",
+      "description": "Present when the underlying scorecard was signed.",
+      "additionalProperties": true,
+      "properties": {
+        "algorithm": { "type": "string" },
+        "public_key": { "type": "string" },
+        "content_sha256": { "type": "string" },
+        "signed_at": { "type": ["string", "null"] }
+      }
+    },
+    "disclaimer": { "type": "string" }
+  },
+  "$defs": {
+    "mapping": {
+      "type": "object",
+      "required": ["framework", "reference", "rationale"],
+      "additionalProperties": false,
+      "properties": {
+        "framework": { "type": "string" },
+        "reference": {
+          "type": "string",
+          "description": "Control family, clause, or article — indicative, not a conformity claim."
+        },
+        "rationale": { "type": "string" }
+      }
+    }
+  }
+}

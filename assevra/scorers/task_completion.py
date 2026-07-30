@@ -19,6 +19,11 @@ from typing import Optional
 from ..scorecard import DimensionResult, RowResult
 
 DIMENSION = "task_completion"
+MODE = "deterministic"
+SUMMARY = "Are the facts a correct completion requires actually present in the output?"
+ANSWER_KEY = ("must_include",)
+REQUIRES = ("agent_output",)
+LABEL_HINT = "Set must_include: the strings or facts a correct output must contain."
 DIMENSION_THRESHOLD = 0.90
 
 
@@ -31,7 +36,11 @@ def _missing_items(output: str, must_include: list[str]) -> list[str]:
     return [item for item in must_include if item.lower() not in low]
 
 
-def score(rows: list[dict], judge: Optional[object] = None) -> DimensionResult:
+def score(
+    rows: list[dict],
+    judge: Optional[object] = None,
+    options: Optional[dict] = None,
+) -> DimensionResult:
     """Score all task-completion rows deterministically. `judge` is ignored
     (kept for a uniform scorer signature)."""
     result = DimensionResult(

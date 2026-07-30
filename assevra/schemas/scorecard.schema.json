@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://assevra.ai/schema/v1/scorecard.schema.json",
+  "title": "Assevra Reliability Scorecard",
+  "description": "The portable release-evidence artifact emitted by `assevra run`. This schema is versioned independently of the Python package: within major version 1, fields are only ever added, never removed or repurposed, so a scorecard written by any 1.x Assevra validates against this schema.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "assevra_version",
+    "dataset",
+    "overall_pass",
+    "dimensions"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "URI of the schema this document claims to conform to."
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+$",
+      "description": "Artifact contract version (major.minor). Minor bumps are additive only."
+    },
+    "assevra_version": {
+      "type": "string",
+      "description": "Version of the Assevra implementation that produced the numbers. Two scorecards are only directly comparable when this matches."
+    },
+    "generated_at": {
+      "type": ["string", "null"],
+      "description": "ISO-8601 UTC timestamp of the run."
+    },
+    "dataset": {
+      "type": "string",
+      "description": "Path or identifier of the dataset scored."
+    },
+    "dataset_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^([0-9a-f]{64})?$",
+      "description": "SHA-256 of the dataset file, so a reader can confirm which rows produced the score."
+    },
+    "judge_model": {
+      "type": "string",
+      "description": "Judge model or panel identifier; empty when no judge ran."
+    },
+    "judge_provider": {
+      "type": ["string", "null"],
+      "description": "Provider that served the judge (anthropic, openai, azure, bedrock, gemini, local, mock)."
+    },
+    "overall_pass": {
+      "type": "boolean",
+      "description": "True only if every scored (non-skipped) dimension passed. Reliability is a conjunction."
+    },
+    "dimensions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/dimension" }
+    },
+    "reliability": {
+      "type": "array",
+      "description": "Present only when the dataset grouped repeated trials with a shared case_id.",
+      "items": { "$ref": "#/$defs/reliability" }
+    }
+  },
+  "$defs": {
+    "dimension": {
+      "type": "object",
+      "required": [
+        "name",
+        "mode",
+        "threshold",
+        "skipped",
+        "sample_size",
+        "passes",
+        "score",
+        "ci_95",
+        "passed"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Dimension identifier. Built-ins are grounding, safety, pii, task_completion, tool_call, action_correctness, injection, cost, latency; third-party scorers may register others."
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["deterministic", "llm-judge"],
+          "description": "How the dimension was scored. Deterministic dimensions are reproducible without a model."
+        },
+        "threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Pass rate at or above which the dimension passes."
+        },
+        "skipped": {
+          "type": "boolean",
+          "description": "True when the dimension's engine was unavailable. A skipped dimension is NOT a pass and does not gate."
+        },
+        "skip_reason": { "type": "string" },
+        "notes": {
+          "type": "string",
+          "description": "Provenance: judge model, pinned-rubric hash, detector engine and version."
+        },
+        "sample_size": { "type": "integer", "minimum": 0 },
+        "passes": { "type": "integer", "minimum": 0 },
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "ci_95": {
+          "type": "array",
+          "description": "95% Wilson score interval [low, high] for the pass rate.",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "number", "minimum": 0, "maximum": 1 }
+        },
+        "passed": {
+          "type": ["boolean", "null"],
+          "description": "Verdict against the threshold; null when skipped."
+        },
+        "rows": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/row" }
+        }
+      }
+    },
+    "row": {
+      "type": "object",
+      "required": ["id", "passed"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string" },
+        "passed": { "type": "boolean" },
+        "detail": { "type": "string" },
+        "raw_score": {
+          "type": ["number", "null"],
+          "description": "Underlying judge score (e.g. 1-5) when the dimension is judged."
+        }
+      }
+    },
+    "reliability": {
+      "type": "object",
+      "required": ["dimension", "cases", "repeated_cases", "trials", "consistency", "k"],
+      "additionalProperties": true,
+      "properties": {
+        "dimension": { "type": "string" },
+        "cases": { "type": "integer", "minimum": 0 },
+        "repeated_cases": { "type": "integer", "minimum": 0 },
+        "trials": { "type": "integer", "minimum": 0 },
+        "consistency": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Share of repeated cases whose trials all agree."
+        },
+        "flaky_cases": { "type": "array", "items": { "type": "string" } },
+        "k": { "type": "integer", "minimum": 1 },
+        "pass_hat_k": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Estimated probability that k independent attempts all pass."
+        },
+        "pass_hat_k_cases": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

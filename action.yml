@@ -1,0 +1,215 @@
+name: Assevra
+description: >-
+  Score your AI agent's reliability, gate the build on a regression, and publish
+  a signed scorecard as release evidence.
+author: Veera Ravindra Divi
+branding:
+  icon: shield
+  color: purple
+
+# Usage:
+#
+#   - uses: assevra/assevra@v1
+#     with:
+#       dataset: evals/agent.jsonl
+#       gate: true
+#     env:
+#       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+#
+# Everything the action does works without a key: the deterministic dimensions
+# always run, and the judged ones are reported as SKIPPED — never as passing —
+# when no provider is configured. That is deliberate, because it is what lets a
+# pull request from a fork get a real gate instead of a red build.
+
+inputs:
+  dataset:
+    description: "Path to the labeled JSONL dataset. Defaults to `dataset:` in .assevra.yml."
+    required: false
+    default: ""
+  config:
+    description: "Path to .assevra.yml (default: discovered by walking up from the repo root)."
+    required: false
+    default: ""
+  out-dir:
+    description: "Directory for the scorecard artifacts."
+    required: false
+    default: ".assevra/out"
+  gate:
+    description: "Fail the build when a scored dimension falls below its threshold."
+    required: false
+    default: "true"
+  strict:
+    description: "Also fail when a row carries no answer key (an unlabeled row is a vacuous pass)."
+    required: false
+    default: "false"
+  fail-on-regression:
+    description: "Fail when a dimension regressed against the recorded baseline."
+    required: false
+    default: "false"
+  history:
+    description: "Run-history JSONL file, enabling regression detection across runs."
+    required: false
+    default: ""
+  label:
+    description: "Label for this run in the history — a git SHA or a version."
+    required: false
+    default: ""
+  baseline:
+    description: "Compare against the most recent history run carrying this label."
+    required: false
+    default: ""
+  judge-provider:
+    description: "anthropic | openai | azure | bedrock | gemini | local | mock | none | auto"
+    required: false
+    default: "auto"
+  judge-model:
+    description: "Judge model or deployment name."
+    required: false
+    default: ""
+  judge-panel:
+    description: "Comma-separated models to use as a jury; entries may be provider:model."
+    required: false
+    default: ""
+  attest:
+    description: "Also emit an Agent Card mapping the evidence to governance frameworks."
+    required: false
+    default: "false"
+  sign-key:
+    description: "Path to an Ed25519 private key (PEM) to sign the scorecard. Use a secret file."
+    required: false
+    default: ""
+  extras:
+    description: "pip extras to install, e.g. 'pii,anthropic,sign'. Empty installs the core only."
+    required: false
+    default: ""
+  version:
+    description: "Assevra version specifier, e.g. '0.4.0'. Empty installs the latest release."
+    required: false
+    default: ""
+  skip-install:
+    description: >-
+      Assume `assevra` is already installed and on PATH. Set this when a job has
+      installed a local checkout (or a pinned build) that the action must not
+      replace with the published wheel.
+    required: false
+    default: "false"
+  python-version:
+    description: "Python to run on."
+    required: false
+    default: "3.12"
+  comment:
+    description: "Write the scorecard summary to the GitHub job summary."
+    required: false
+    default: "true"
+  upload-artifact:
+    description: "Upload the scorecard artifacts to the workflow run."
+    required: false
+    default: "true"
+  artifact-name:
+    description: "Name for the uploaded artifact."
+    required: false
+    default: "assevra-scorecard"
+
+outputs:
+  passed:
+    description: "'true' when every scored dimension passed."
+    value: ${{ steps.score.outputs.passed }}
+  scorecard:
+    description: "Path to the JSON scorecard."
+    value: ${{ steps.score.outputs.scorecard }}
+  html:
+    description: "Path to the styled HTML report."
+    value: ${{ steps.score.outputs.html }}
+  summary:
+    description: "One-line verdict, e.g. '7/8 dimensions passed over 214 rows'."
+    value: ${{ steps.score.outputs.summary }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      if: inputs.skip-install != 'true'
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Assevra
+      if: inputs.skip-install != 'true'
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        spec="assevra"
+        if [ -n "${{ inputs.version }}" ]; then spec="assevra==${{ inputs.version }}"; fi
+        if [ -n "${{ inputs.extras }}" ]; then spec="assevra[${{ inputs.extras }}]"; fi
+        if [ -n "${{ inputs.version }}" ] && [ -n "${{ inputs.extras }}" ]; then
+          spec="assevra[${{ inputs.extras }}]==${{ inputs.version }}"
+        fi
+        echo "installing $spec"
+        pip install "$spec"
+        assevra --version
+
+    - name: Validate the dataset before scoring it
+      shell: bash
+      run: |
+        args=()
+        [ -n "${{ inputs.dataset }}" ] && args+=("${{ inputs.dataset }}")
+        [ -n "${{ inputs.config }}" ] && args+=(--config "${{ inputs.config }}")
+        [ "${{ inputs.strict }}" = "true" ] && args+=(--strict)
+        assevra validate "${args[@]}"
+
+    - name: Score the agent
+      id: score
+      shell: bash
+      run: |
+        args=(--out-dir "${{ inputs.out-dir }}")
+        [ -n "${{ inputs.dataset }}" ] && args+=(--dataset "${{ inputs.dataset }}")
+        [ -n "${{ inputs.config }}" ] && args+=(--config "${{ inputs.config }}")
+        [ -n "${{ inputs.history }}" ] && args+=(--history "${{ inputs.history }}")
+        [ -n "${{ inputs.label }}" ] && args+=(--label "${{ inputs.label }}")
+        [ -n "${{ inputs.baseline }}" ] && args+=(--baseline "${{ inputs.baseline }}")
+        [ -n "${{ inputs.judge-model }}" ] && args+=(--judge-model "${{ inputs.judge-model }}")
+        [ -n "${{ inputs.judge-panel }}" ] && args+=(--judge-panel "${{ inputs.judge-panel }}")
+        [ -n "${{ inputs.sign-key }}" ] && args+=(--sign "${{ inputs.sign-key }}")
+        [ "${{ inputs.judge-provider }}" != "auto" ] && args+=(--judge-provider "${{ inputs.judge-provider }}")
+        [ "${{ inputs.gate }}" = "true" ] && args+=(--gate)
+        [ "${{ inputs.strict }}" = "true" ] && args+=(--strict)
+        [ "${{ inputs.attest }}" = "true" ] && args+=(--attest)
+        [ "${{ inputs.fail-on-regression }}" = "true" ] && args+=(--fail-on-regression)
+        [ "${{ inputs.comment }}" != "true" ] && unset GITHUB_STEP_SUMMARY
+
+        # Capture the exit code so the outputs and the artifact are still
+        # produced on a failing gate — a red build is exactly when someone needs
+        # to open the report.
+        set +e
+        assevra run "${args[@]}"
+        code=$?
+        set -e
+
+        card="${{ inputs.out-dir }}/scorecard.json"
+        echo "scorecard=$card" >> "$GITHUB_OUTPUT"
+        echo "html=${{ inputs.out-dir }}/scorecard.html" >> "$GITHUB_OUTPUT"
+        if [ -f "$card" ]; then
+          python - "$card" >> "$GITHUB_OUTPUT" <<'PY'
+        import json, sys
+        card = json.load(open(sys.argv[1]))
+        scored = [d for d in card["dimensions"] if not d["skipped"]]
+        passed = sum(1 for d in scored if d["passed"])
+        rows = sum(d["sample_size"] for d in scored)
+        skipped = len(card["dimensions"]) - len(scored)
+        note = f", {skipped} skipped" if skipped else ""
+        print(f"passed={'true' if card['overall_pass'] else 'false'}")
+        print(f"summary={passed}/{len(scored)} dimensions passed over {rows} rows{note}")
+        PY
+        else
+          echo "passed=false" >> "$GITHUB_OUTPUT"
+          echo "summary=no scorecard produced" >> "$GITHUB_OUTPUT"
+        fi
+        exit $code
+
+    - name: Upload the scorecard
+      if: always() && inputs.upload-artifact == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.out-dir }}
+        if-no-files-found: warn

@@ -1,17 +1,29 @@
 """
-Assevra command-line interface.
+The Assevra command line.
 
-    python -m assevra run --dataset datasets/golden.jsonl
+Twelve commands, one arc: get a dataset, prove it is worth scoring, score it,
+prove the judge, seal the result, map it for a reviewer, and gate the build.
 
-Loads a JSONL dataset, routes each row to its dimension's scorer, aggregates the
-results into an Assevra Reliability Scorecard, and writes `scorecard.md`,
-`scorecard.json`, and a styled, self-contained `scorecard.html`. The
-deterministic dimensions (PII, task-completion) run with no
-API key; the LLM-judge dimensions (grounding, safety) run when ANTHROPIC_API_KEY
-is set and are skipped -- not failed -- otherwise.
+    assevra demo                     a full worked scorecard, no clone, no key
+    assevra init --from traces.jsonl detect, then generate config + dataset + CI
+    assevra integrate langgraph      how to feed Assevra from the tool you use
+    assevra bootstrap --from ...     draft a dataset from captured traces
+    assevra validate                 LABELED / UNLABELED / INVALID, before scoring
+    assevra run                      score, gate, and write the artifacts
+    assevra calibrate                judge-vs-human agreement (Cohen's κ)
+    assevra keygen / sign / verify   Ed25519 provenance for the artifact
+    assevra attest                   map evidence to governance frameworks
+    assevra history                  the reliability trend across runs
+    assevra schema                   the published artifact contracts
 
-Exit code is 0 when the scorecard passes, 1 when it fails, so the command can
-gate CI directly.
+Almost every flag has a ``.assevra.yml`` equivalent, and the precedence is the
+one you would guess: **defaults < config file < environment < flags.** A team
+should be able to type ``assevra run`` and get the same evaluation on every
+machine.
+
+Exit codes are stable, because CI depends on them: **0** success, **1** the gate
+failed (a dimension below threshold, a regression, or an uncalibrated judge),
+**2** the command could not run at all (bad dataset, missing file, bad flag).
 """
 from __future__ import annotations
 
@@ -21,103 +33,61 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import NoReturn, Optional
 
-from . import bootstrap as bootstrap_mod
-from .judge import DEFAULT_JUDGE_MODEL, get_judge, get_panel
-from .scorecard import ASSEVRA_DOI, Scorecard
-from .scorers import grounding, pii, safety, task_completion
+from . import api, bootstrap as bootstrap_mod, config as config_mod
+from . import demo as demo_mod
+from . import integrations as integrations_mod
+from . import providers, registry, schemas, validate as validate_mod
+from .judge import build_judge
+from .scorecard import ASSEVRA_DOI, ASSEVRA_VERSION
 
-# Maps a dataset row's `dimension` to the scorer module that handles it.
-SCORERS = {
-    grounding.DIMENSION: grounding.score,
-    safety.DIMENSION: safety.score,
-    pii.DIMENSION: pii.score,
-    task_completion.DIMENSION: task_completion.score,
-}
-
-# Deterministic dimensions do not need a judge.
-JUDGE_DIMENSIONS = {grounding.DIMENSION, safety.DIMENSION}
-
-# Report dimensions in a stable, meaningful order.
-DIMENSION_ORDER = [
-    grounding.DIMENSION,
-    safety.DIMENSION,
-    pii.DIMENSION,
-    task_completion.DIMENSION,
-]
+EXIT_OK = 0
+EXIT_GATE_FAILED = 1
+EXIT_USAGE = 2
 
 
-def load_dataset(path: str) -> list[dict]:
-    rows: list[dict] = []
-    with open(path, encoding="utf-8") as fh:
-        for lineno, line in enumerate(fh, start=1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rows.append(json.loads(line))
-            except json.JSONDecodeError as exc:
-                raise SystemExit(f"{path}:{lineno}: invalid JSON: {exc}") from exc
-    return rows
+def _die(message: str, code: int = EXIT_USAGE) -> NoReturn:
+    """Fail with a single actionable line on stderr and a stable exit code."""
+    print(f"[assevra] {message}", file=sys.stderr)
+    raise SystemExit(code)
 
 
-def group_by_dimension(rows: list[dict]) -> dict[str, list[dict]]:
-    grouped: dict[str, list[dict]] = {}
-    for row in rows:
-        dim = row.get("dimension")
-        if dim not in SCORERS:
-            raise SystemExit(
-                f"row {row.get('id', '?')!r} has unknown dimension {dim!r}; "
-                f"expected one of {sorted(SCORERS)}"
-            )
-        grouped.setdefault(dim, []).append(row)
-    return grouped
+def _now() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
-def build_scorecard(
-    dataset_path: str,
-    judge_model: str,
-    pass_k: int = 2,
-    judge_panel: Optional[list] = None,
-) -> Scorecard:
-    from . import reliability as reliability_mod
+def _load_config(args: argparse.Namespace) -> config_mod.Config:
+    requested = getattr(args, "config", None)
+    # `--config none` runs with built-in defaults only. Useful when debugging a
+    # project whose config is itself the suspect, and what the test suite uses to
+    # stay independent of whatever config happens to sit above the working
+    # directory.
+    if requested and requested.strip().lower() in ("none", "off", "-"):
+        return config_mod.Config(config_mod._deep_merge(config_mod.DEFAULTS, {}), None, [])
+    try:
+        cfg = config_mod.load(requested)
+    except config_mod.ConfigError as exc:
+        _die(str(exc))
+    for key in cfg.unknown_keys:
+        print(
+            f"[assevra] warning: {cfg.path}: unknown config key {key!r} (ignored). "
+            "Check the spelling against https://assevra.ai/docs/configuration",
+            file=sys.stderr,
+        )
+    return cfg
 
-    rows = load_dataset(dataset_path)
-    grouped = group_by_dimension(rows)
 
-    # Map each row id to its case id (rows sharing a case_id are repeated trials
-    # of one logical case; an ungrouped row is its own single-trial case).
-    id_to_case = {row.get("id", "?"): row.get("case_id", row.get("id", "?")) for row in rows}
-
-    # Build the judge once and share it across the judge dimensions. A panel of
-    # models (if given) is used as a jury; otherwise a single judge.
-    judge = get_panel(judge_panel) if judge_panel else get_judge(judge_model)
-
-    dimensions = []
-    for dim in DIMENSION_ORDER:
-        if dim not in grouped:
-            continue
-        scorer = SCORERS[dim]
-        if dim in JUDGE_DIMENSIONS:
-            dimensions.append(scorer(grouped[dim], judge))
-        else:
-            dimensions.append(scorer(grouped[dim], None))
-
-    # pass^k / consistency over any repeated-trial cases (empty otherwise).
-    reliability = []
-    for dim in dimensions:
-        passed_by_case = reliability_mod.group_passed_by_case(dim.rows, id_to_case)
-        cr = reliability_mod.compute_dimension(dim.name, passed_by_case, pass_k)
-        if cr is not None:
-            reliability.append(cr)
-
-    return Scorecard(
-        dimensions=dimensions,
-        dataset=dataset_path,
-        judge_model=judge.model if judge is not None else "",
-        reliability=reliability,
-    )
+def _resolve_dataset(args: argparse.Namespace, cfg: config_mod.Config) -> str:
+    dataset = getattr(args, "dataset", None) or cfg.get("dataset", "")
+    if not dataset:
+        _die(
+            "no dataset given. Pass --dataset PATH, or set `dataset:` in .assevra.yml "
+            "(`assevra init` writes one for you)."
+        )
+    if not Path(dataset).is_file():
+        _die(f"dataset not found: {dataset}")
+    return dataset
 
 
 def _parse_panel(spec: Optional[str]) -> Optional[list]:
@@ -127,172 +97,358 @@ def _parse_panel(spec: Optional[str]) -> Optional[list]:
     return models or None
 
 
+def _parse_thresholds(pairs: Optional[list]) -> dict:
+    out: dict[str, float] = {}
+    for pair in pairs or []:
+        if "=" not in pair:
+            _die(f"--threshold expects DIMENSION=VALUE, got {pair!r}")
+        name, _, value = pair.partition("=")
+        if not registry.has_scorer(name.strip()):
+            _die(
+                f"--threshold names unknown dimension {name.strip()!r}; "
+                f"known: {', '.join(registry.dimensions())}"
+            )
+        try:
+            out[name.strip()] = float(value)
+        except ValueError:
+            _die(f"--threshold value must be a number, got {value!r}")
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# run                                                                          #
+# --------------------------------------------------------------------------- #
 def cmd_run(args: argparse.Namespace) -> int:
-    if not Path(args.dataset).is_file():
-        raise SystemExit(f"dataset not found: {args.dataset}")
+    cfg = _load_config(args)
+    dataset = _resolve_dataset(args, cfg)
 
-    panel = _parse_panel(args.judge_panel)
-    scorecard = build_scorecard(args.dataset, args.judge_model, args.pass_k, judge_panel=panel)
+    out_dir = args.out_dir or cfg.get("out_dir", ".")
+    formats = args.format or cfg.get("reports.formats", ["md", "json", "html"])
+    panel = _parse_panel(args.judge_panel) or cfg.get("judge.panel", []) or None
 
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    md_path = out_dir / "scorecard.md"
-    json_path = out_dir / "scorecard.json"
-    html_path = out_dir / "scorecard.html"
-    md_path.write_text(scorecard.render_markdown(), encoding="utf-8")
-    json_path.write_text(scorecard.to_json(), encoding="utf-8")
-    html_path.write_text(scorecard.render_html(), encoding="utf-8")
+    try:
+        scorecard = api.evaluate(
+            dataset=dataset,
+            config=cfg,
+            judge_provider=args.judge_provider,
+            judge_model=args.judge_model,
+            judge_panel=panel,
+            pass_k=args.pass_k,
+            thresholds=_parse_thresholds(args.threshold),
+            validate=False if args.no_validate else None,
+            strict=True if args.strict else None,
+        )
+    except api.DatasetError as exc:
+        print(f"[assevra] {exc}", file=sys.stderr)
+        if exc.report is not None:
+            print(validate_mod.render(exc.report), file=sys.stderr)
+        return EXIT_USAGE
+    except providers.ProviderError as exc:
+        _die(str(exc))
 
-    # A short console summary; the full detail is in the written files.
-    print(scorecard.render_markdown())
-    print(f"[assevra] wrote {md_path}")
-    print(f"[assevra] wrote {json_path}")
-    print(f"[assevra] wrote {html_path}")
+    written = api.write_reports(scorecard, out_dir, formats)
+    if not args.quiet:
+        print(scorecard.render_markdown())
+    for path in written:
+        print(f"[assevra] wrote {path}")
     print(f"[assevra] cite: https://doi.org/{ASSEVRA_DOI}  (see CITATION.cff)")
 
-    if args.sign:
+    directory = Path(out_dir)
+    json_path = directory / "scorecard.json"
+
+    signature_block = None
+    sign_key = args.sign or cfg.get("signing.key", "")
+    if sign_key:
         from . import signing
 
-        if not Path(args.sign).is_file():
-            raise SystemExit(f"[assevra] signing key not found: {args.sign}")
-        signed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        if not Path(sign_key).is_file():
+            _die(f"signing key not found: {sign_key}")
         try:
-            block = signing.sign_scorecard(
+            signature_block = signing.sign_scorecard(
                 scorecard.to_dict(),
-                Path(args.sign).read_text(encoding="utf-8"),
-                signed_at=signed_at,
+                Path(sign_key).read_text(encoding="utf-8"),
+                signed_at=_now(),
             )
         except signing.SigningError as exc:
-            raise SystemExit(f"[assevra] {exc}")
-        sig_path = out_dir / "scorecard.sig.json"
-        sig_path.write_text(json.dumps(block, indent=2) + "\n", encoding="utf-8")
+            _die(str(exc))
+        sig_path = directory / "scorecard.sig.json"
+        sig_path.write_text(json.dumps(signature_block, indent=2) + "\n", encoding="utf-8")
         print(f"[assevra] wrote {sig_path}  (detached signature)")
         print(
-            f"[assevra] verify: python -m assevra verify "
-            f"--scorecard {json_path} --signature {sig_path}"
+            f"[assevra] verify: assevra verify --scorecard {json_path} --signature {sig_path}"
         )
 
+    if cfg.pick(args.attest, "attest.enabled", False):
+        from . import attest as attest_mod
+
+        card = attest_mod.build_card_dict(
+            scorecard.to_dict(), signature=signature_block, generated_at=_now()
+        )
+        (directory / "agent-card.md").write_text(
+            attest_mod.render_markdown(card), encoding="utf-8"
+        )
+        (directory / "agent-card.json").write_text(
+            attest_mod.render_json(card), encoding="utf-8"
+        )
+        print(f"[assevra] wrote {directory / 'agent-card.md'}")
+        print(f"[assevra] wrote {directory / 'agent-card.json'}")
+
     regressed = False
-    if args.history:
+    history_path = args.history or cfg.get("history.path", "")
+    if history_path:
         from . import history as history_mod
 
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        record = history_mod.record_from_scorecard(scorecard, args.label or "", now)
-        past = history_mod.load_history(args.history)
-        baseline = history_mod.find_baseline(past, args.baseline)
+        label = args.label or cfg.get("history.label", "")
+        baseline_label = args.baseline or cfg.get("history.baseline", "")
+        record = history_mod.record_from_scorecard(scorecard, label, _now())
+        past = history_mod.load_history(history_path)
+        baseline = history_mod.find_baseline(past, baseline_label or None)
         if baseline is not None:
             deltas = history_mod.compare(baseline, record)
             print()
             print(history_mod.render_comparison(baseline, record, deltas))
             regressed = history_mod.is_overall_regression(baseline, record, deltas)
         else:
-            where = f"label {args.baseline!r}" if args.baseline else "empty history"
+            where = f"label {baseline_label!r}" if baseline_label else "empty history"
             print(f"[assevra] history: no prior run to compare ({where}); recording baseline.")
-        history_mod.append_record(args.history, record)
-        label_note = f" (label: {args.label})" if args.label else ""
-        print(f"[assevra] appended this run to {args.history}{label_note}")
+        history_mod.append_record(history_path, record)
+        note = f" (label: {label})" if label else ""
+        print(f"[assevra] appended this run to {history_path}{note}")
 
-    exit_code = 0
-    if args.gate and not scorecard.overall_pass:
-        exit_code = 1
-    if args.fail_on_regression and regressed:
-        if exit_code == 0:
-            print("[assevra] failing the build on regression (--fail-on-regression).")
-        exit_code = 1
+    _write_ci_summary(scorecard, written, regressed)
+
+    exit_code = EXIT_OK
+    if cfg.pick(args.gate, "gate.enabled", False) and not scorecard.overall_pass:
+        exit_code = EXIT_GATE_FAILED
+        print("[assevra] gate: FAILED — a scored dimension is below its threshold.")
+    if cfg.pick(args.fail_on_regression, "gate.fail_on_regression", False) and regressed:
+        if exit_code == EXIT_OK:
+            print("[assevra] gate: FAILED — a dimension regressed against the baseline.")
+        exit_code = EXIT_GATE_FAILED
     return exit_code
 
 
-def cmd_keygen(args: argparse.Namespace) -> int:
-    from . import signing
+def _write_ci_summary(scorecard, written, regressed: bool) -> None:
+    """Render a compact summary into GitHub's job summary, when running there.
 
+    A build that fails should say *what* failed on the page the developer is
+    already looking at, not only inside a downloaded artifact.
+    """
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+    verdict = "✅ PASS" if scorecard.overall_pass else "❌ FAIL"
+    lines = [
+        "## Assevra reliability scorecard",
+        "",
+        f"**Overall: {verdict}** · measured with Assevra v{scorecard.version}",
+        "",
+        "| Dimension | Mode | Score | 95% CI | n | Threshold | Result |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for dimension in scorecard.dimensions:
+        if dimension.skipped:
+            lines.append(
+                f"| `{dimension.name}` | {dimension.mode} | — | — | {dimension.n} | "
+                f"{dimension.threshold:.2f} | ⏭️ SKIPPED |"
+            )
+            continue
+        low, high = dimension.ci
+        mark = "✅" if dimension.passed else "❌"
+        lines.append(
+            f"| `{dimension.name}` | {dimension.mode} | {dimension.score:.3f} | "
+            f"{low:.3f}–{high:.3f} | {dimension.n} | {dimension.threshold:.2f} | "
+            f"{mark} {'PASS' if dimension.passed else 'FAIL'} |"
+        )
+    failures = scorecard.failures()
+    if failures:
+        lines += ["", f"### {len(failures)} failing row(s)", ""]
+        for name, row in failures[:15]:
+            lines.append(f"- **{name}** `{row.row_id}` — {row.detail}")
+        if len(failures) > 15:
+            lines.append(f"- …and {len(failures) - 15} more")
+    if regressed:
+        lines += ["", "> ⚠️ A dimension regressed against the recorded baseline."]
+    lines += [
+        "",
+        "<sub>A skipped dimension is not a passing one. Every score carries its sample "
+        "size and a 95% Wilson interval.</sub>",
+        "",
+    ]
     try:
-        priv_pem, pub_b64 = signing.generate_keypair()
-    except signing.SigningError as exc:
-        raise SystemExit(f"[assevra] {exc}")
-
-    Path(args.out_private).write_text(priv_pem, encoding="utf-8")
-    try:
-        os.chmod(args.out_private, 0o600)
+        with open(summary_path, "a", encoding="utf-8") as handle:
+            handle.write("\n".join(lines))
     except OSError:
         pass
-    Path(args.out_public).write_text(pub_b64 + "\n", encoding="utf-8")
-
-    print(f"[assevra] wrote private key -> {args.out_private}  (KEEP SECRET — never commit)")
-    print(f"[assevra] wrote public key  -> {args.out_public}")
-    print(f"[assevra] public key: {pub_b64}")
-    print("[assevra] publish the PUBLIC key so anyone can verify your scorecards.")
-    return 0
 
 
-def cmd_sign(args: argparse.Namespace) -> int:
-    from . import signing
+# --------------------------------------------------------------------------- #
+# validate                                                                     #
+# --------------------------------------------------------------------------- #
+def cmd_validate(args: argparse.Namespace) -> int:
+    cfg = _load_config(args)
+    dataset = _resolve_dataset(args, cfg)
+    strict = bool(args.strict or cfg.get("validate.strict", False))
 
-    if not Path(args.scorecard).is_file():
-        raise SystemExit(f"[assevra] scorecard not found: {args.scorecard}")
-    if not Path(args.key).is_file():
-        raise SystemExit(f"[assevra] signing key not found: {args.key}")
-
-    try:
-        scorecard = json.loads(Path(args.scorecard).read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"[assevra] {args.scorecard}: invalid JSON: {exc}")
-
-    signed_at = args.timestamp or datetime.datetime.now(datetime.timezone.utc).isoformat()
-    try:
-        block = signing.sign_scorecard(
-            scorecard, Path(args.key).read_text(encoding="utf-8"), signed_at=signed_at
-        )
-    except signing.SigningError as exc:
-        raise SystemExit(f"[assevra] {exc}")
-
-    out = args.out or str(Path(args.scorecard).with_suffix(".sig.json"))
-    Path(out).write_text(json.dumps(block, indent=2) + "\n", encoding="utf-8")
-    print(f"[assevra] signed {args.scorecard} -> {out}")
-    print(f"[assevra] content sha256: {block['content_sha256']}")
-    print(
-        f"[assevra] verify: python -m assevra verify "
-        f"--scorecard {args.scorecard} --signature {out}"
+    report = validate_mod.validate_dataset(
+        dataset,
+        strict=strict,
+        options=cfg.scorer_options(),
+        assevra_version=ASSEVRA_VERSION,
+        generated_at=_now(),
     )
-    return 0
+    if args.json:
+        print(report.to_json())
+    else:
+        print(validate_mod.render(report, show="all" if args.all else "problems"))
+    if args.out:
+        Path(args.out).write_text(report.to_json() + "\n", encoding="utf-8")
+        print(f"[assevra] wrote {args.out}")
+    return EXIT_OK if report.ok else EXIT_GATE_FAILED
 
 
-def cmd_verify(args: argparse.Namespace) -> int:
-    from . import signing
+# --------------------------------------------------------------------------- #
+# demo                                                                         #
+# --------------------------------------------------------------------------- #
+def cmd_demo(args: argparse.Namespace) -> int:
+    try:
+        scorecard, _ = demo_mod.run(
+            out_dir=args.out_dir, provider=args.provider, judge_model=args.judge_model or ""
+        )
+    except providers.ProviderError as exc:
+        _die(str(exc))
+    print(scorecard.render_markdown())
+    print(demo_mod.summary(scorecard, args.out_dir))
+    return EXIT_OK
 
-    if not Path(args.scorecard).is_file():
-        raise SystemExit(f"[assevra] scorecard not found: {args.scorecard}")
-    if not Path(args.signature).is_file():
-        raise SystemExit(f"[assevra] signature not found: {args.signature}")
+
+# --------------------------------------------------------------------------- #
+# init                                                                         #
+# --------------------------------------------------------------------------- #
+def cmd_init(args: argparse.Namespace) -> int:
+    from . import init as init_mod
 
     try:
-        scorecard = json.loads(Path(args.scorecard).read_text(encoding="utf-8"))
-        sig_block = json.loads(Path(args.signature).read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"[assevra] invalid JSON: {exc}")
+        plan, found = init_mod.plan(
+            root=args.root,
+            dataset=args.dataset,
+            from_traces=args.source,
+            workflow=not args.no_workflow,
+            docs=not args.no_docs,
+        )
+    except FileNotFoundError as exc:
+        _die(str(exc))
 
-    expected = None
-    if args.public_key:
-        pk = Path(args.public_key)
-        expected = pk.read_text(encoding="utf-8").strip() if pk.is_file() else args.public_key.strip()
+    print(init_mod.render_detection(found))
+    print()
+    targets = [plan.config_path, plan.dataset_path, plan.workflow_path, plan.doc_path]
+    print("[assevra] will write:")
+    for target in targets:
+        if target is not None:
+            print(f"[assevra]   {target}")
+    if plan.dataset_path is None:
+        print(
+            "[assevra]   (no dataset — no traces found. Re-run with "
+            "--from <file>, or start from `assevra demo`.)"
+        )
+
+    if args.dry_run:
+        print("\n[assevra] --dry-run: nothing written.")
+        return EXIT_OK
 
     try:
-        result = signing.verify_scorecard(scorecard, sig_block, expected_public_key_b64=expected)
-    except signing.SigningError as exc:
-        raise SystemExit(f"[assevra] {exc}")
+        plan = init_mod.apply(
+            plan, dimension=args.dimension, limit=args.limit, force=args.force
+        )
+    except bootstrap_mod.BootstrapError as exc:
+        _die(f"bootstrap: {exc}")
 
-    print(f"[assevra] verification: {'OK' if result.ok else 'FAILED'}")
-    print(f"[assevra] {result.reason}")
-    if result.signed_at:
-        print(f"[assevra] signed_at: {result.signed_at}")
-    if result.public_key:
-        print(f"[assevra] public key: {result.public_key}")
-    return 0 if result.ok else 1
+    print()
+    if plan.drafted_rows:
+        print(
+            f"[assevra] drafted {plan.drafted_rows} rows from {plan.source_trace} "
+            f"(format: {plan.trace_format}) -> {plan.dataset_path}"
+        )
+        print(
+            "[assevra] every drafted row is tagged needs-review: fill the answer key "
+            "each row's `_review` hint asks for."
+        )
+    for path in plan.skipped:
+        print(f"[assevra] kept existing {path} (use --force to overwrite)")
+
+    print()
+    print("[assevra] next:")
+    if plan.dataset_path is not None:
+        print(f"[assevra]   1. label the rows in {plan.dataset_path}")
+        print("[assevra]   2. assevra validate --strict")
+        print("[assevra]   3. assevra run --gate")
+    else:
+        print("[assevra]   1. capture some agent outputs")
+        print("[assevra]   2. assevra bootstrap --from traces.jsonl --out evals/agent.jsonl")
+        print("[assevra]   3. assevra run --gate")
+    if plan.frameworks:
+        print(f"[assevra]   see also: assevra integrate {plan.frameworks[0]}")
+    return EXIT_OK
 
 
+# --------------------------------------------------------------------------- #
+# integrate                                                                    #
+# --------------------------------------------------------------------------- #
+def cmd_integrate(args: argparse.Namespace) -> int:
+    if args.list or not args.target:
+        print("Available integrations:\n")
+        for name in integrations_mod.names():
+            integration = integrations_mod.INTEGRATIONS[name]
+            print(f"  {name:<16} {integration.title}")
+        print("\nUse:  assevra integrate <name> [--out INTEGRATION.md]")
+        return EXIT_OK
+    try:
+        integration = integrations_mod.get(args.target)
+    except KeyError as exc:
+        _die(str(exc))
+    text = integration.render(dataset=args.dataset or "evals/agent.jsonl")
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"[assevra] wrote {args.out}")
+    else:
+        print(text)
+    return EXIT_OK
+
+
+# --------------------------------------------------------------------------- #
+# schema                                                                       #
+# --------------------------------------------------------------------------- #
+def cmd_schema(args: argparse.Namespace) -> int:
+    if args.list or (not args.name and not args.out_dir):
+        print(f"Assevra artifact contracts (schema version {schemas.SCHEMA_VERSION}):\n")
+        for name in schemas.NAMES:
+            print(f"  {name:<14} {schemas.schema_url(name)}")
+        print(
+            "\nWithin schema major version 1, fields are only added — never removed,"
+            "\nrenamed, or repurposed. Validate your artifacts against these in CI."
+        )
+        return EXIT_OK
+    if args.out_dir:
+        directory = Path(args.out_dir)
+        directory.mkdir(parents=True, exist_ok=True)
+        for name in schemas.NAMES:
+            target = directory / f"{name}.schema.json"
+            target.write_text(schemas.schema_path(name).read_text(encoding="utf-8"), encoding="utf-8")
+            print(f"[assevra] wrote {target}")
+        return EXIT_OK
+    try:
+        print(json.dumps(schemas.load(args.name), indent=2))
+    except KeyError as exc:
+        _die(str(exc))
+    return EXIT_OK
+
+
+# --------------------------------------------------------------------------- #
+# bootstrap / keygen / sign / verify / history / attest / calibrate            #
+# --------------------------------------------------------------------------- #
 def cmd_bootstrap(args: argparse.Namespace) -> int:
     if not Path(args.source).is_file():
-        raise SystemExit(f"source not found: {args.source}")
-
+        _die(f"source not found: {args.source}")
     try:
         rows, resolved = bootstrap_mod.bootstrap(
             args.source,
@@ -305,10 +461,9 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
             context_field=args.context_field,
         )
     except bootstrap_mod.BootstrapError as exc:
-        raise SystemExit(f"[assevra] bootstrap: {exc}")
+        _die(f"bootstrap: {exc}")
 
     bootstrap_mod.write_dataset(rows, args.out)
-
     hint = bootstrap_mod._DIMENSION_TEMPLATE[args.dimension]["hint"]
     print(
         f"[assevra] drafted {len(rows)} rows from {args.source} "
@@ -320,316 +475,412 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
         "[assevra] rows for other dimensions? re-tag their `dimension` field and "
         "fill that dimension's label."
     )
-    print(f"[assevra] then score it:  python -m assevra run --dataset {args.out}")
-    return 0
+    print(f"[assevra] then check it:  assevra validate {args.out}")
+    return EXIT_OK
+
+
+def cmd_keygen(args: argparse.Namespace) -> int:
+    from . import signing
+
+    try:
+        priv_pem, pub_b64 = signing.generate_keypair()
+    except signing.SigningError as exc:
+        _die(str(exc))
+
+    Path(args.out_private).write_text(priv_pem, encoding="utf-8")
+    try:
+        os.chmod(args.out_private, 0o600)
+    except OSError:
+        pass
+    Path(args.out_public).write_text(pub_b64 + "\n", encoding="utf-8")
+
+    print(f"[assevra] wrote private key -> {args.out_private}  (KEEP SECRET — never commit)")
+    print(f"[assevra] wrote public key  -> {args.out_public}")
+    print(f"[assevra] public key: {pub_b64}")
+    print("[assevra] publish the PUBLIC key so anyone can verify your scorecards.")
+    return EXIT_OK
+
+
+def cmd_sign(args: argparse.Namespace) -> int:
+    from . import signing
+
+    if not Path(args.scorecard).is_file():
+        _die(f"scorecard not found: {args.scorecard}")
+    if not Path(args.key).is_file():
+        _die(f"signing key not found: {args.key}")
+    try:
+        scorecard = json.loads(Path(args.scorecard).read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        _die(f"{args.scorecard}: invalid JSON: {exc}")
+
+    signed_at = args.timestamp or _now()
+    try:
+        block = signing.sign_scorecard(
+            scorecard, Path(args.key).read_text(encoding="utf-8"), signed_at=signed_at
+        )
+    except signing.SigningError as exc:
+        _die(str(exc))
+
+    out = args.out or str(Path(args.scorecard).with_suffix(".sig.json"))
+    Path(out).write_text(json.dumps(block, indent=2) + "\n", encoding="utf-8")
+    print(f"[assevra] signed {args.scorecard} -> {out}")
+    print(f"[assevra] content sha256: {block['content_sha256']}")
+    print(f"[assevra] verify: assevra verify --scorecard {args.scorecard} --signature {out}")
+    return EXIT_OK
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    from . import signing
+
+    if not Path(args.scorecard).is_file():
+        _die(f"scorecard not found: {args.scorecard}")
+    if not Path(args.signature).is_file():
+        _die(f"signature not found: {args.signature}")
+    try:
+        scorecard = json.loads(Path(args.scorecard).read_text(encoding="utf-8"))
+        sig_block = json.loads(Path(args.signature).read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        _die(f"invalid JSON: {exc}")
+
+    expected = None
+    if args.public_key:
+        pk = Path(args.public_key)
+        expected = (
+            pk.read_text(encoding="utf-8").strip() if pk.is_file() else args.public_key.strip()
+        )
+
+    try:
+        result = signing.verify_scorecard(scorecard, sig_block, expected_public_key_b64=expected)
+    except signing.SigningError as exc:
+        _die(str(exc))
+
+    print(f"[assevra] verification: {'OK' if result.ok else 'FAILED'}")
+    print(f"[assevra] {result.reason}")
+    if result.signed_at:
+        print(f"[assevra] signed_at: {result.signed_at}")
+    if result.public_key:
+        print(f"[assevra] public key: {result.public_key}")
+    return EXIT_OK if result.ok else EXIT_GATE_FAILED
 
 
 def cmd_history(args: argparse.Namespace) -> int:
     from . import history as history_mod
 
-    hist = history_mod.load_history(args.history)
+    cfg = _load_config(args)
+    path = args.history or cfg.get("history.path", "")
+    if not path:
+        _die("no history file given. Pass --history PATH or set history.path in .assevra.yml")
+    hist = history_mod.load_history(path)
     print(history_mod.render_history(hist, limit=args.limit))
-    return 0
+    return EXIT_OK
 
 
 def cmd_attest(args: argparse.Namespace) -> int:
     from . import attest as attest_mod
 
     if not Path(args.scorecard).is_file():
-        raise SystemExit(f"scorecard not found: {args.scorecard}")
+        _die(f"scorecard not found: {args.scorecard}")
     try:
         scorecard = json.loads(Path(args.scorecard).read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise SystemExit(f"[assevra] {args.scorecard}: invalid JSON: {exc}")
+        _die(f"{args.scorecard}: invalid JSON: {exc}")
 
     signature = None
     if args.signature:
         if not Path(args.signature).is_file():
-            raise SystemExit(f"signature not found: {args.signature}")
+            _die(f"signature not found: {args.signature}")
         signature = json.loads(Path(args.signature).read_text(encoding="utf-8"))
 
-    generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    card = attest_mod.build_card_dict(scorecard, signature=signature, generated_at=generated_at)
-
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    md_path = out_dir / "agent-card.md"
-    json_path = out_dir / "agent-card.json"
-    md_path.write_text(attest_mod.render_markdown(card), encoding="utf-8")
-    json_path.write_text(attest_mod.render_json(card), encoding="utf-8")
-    print(f"[assevra] wrote {md_path}")
-    print(f"[assevra] wrote {json_path}")
+    card = attest_mod.build_card_dict(scorecard, signature=signature, generated_at=_now())
+    directory = Path(args.out_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "agent-card.md").write_text(attest_mod.render_markdown(card), encoding="utf-8")
+    (directory / "agent-card.json").write_text(attest_mod.render_json(card), encoding="utf-8")
+    print(f"[assevra] wrote {directory / 'agent-card.md'}")
+    print(f"[assevra] wrote {directory / 'agent-card.json'}")
     print(
         "[assevra] the Agent Card maps evidence to control families — it is NOT a "
         "certification, a compliance determination, or legal advice."
     )
-    return 0
+    return EXIT_OK
 
 
 def cmd_calibrate(args: argparse.Namespace) -> int:
     from . import calibration as calib
 
-    if not Path(args.dataset).is_file():
-        raise SystemExit(f"dataset not found: {args.dataset}")
-    rows = load_dataset(args.dataset)
+    cfg = _load_config(args)
+    dataset = _resolve_dataset(args, cfg)
+    label_field = args.label_field or cfg.get("calibration.label_field", "human_label")
+    bar = float(cfg.get("calibration.kappa_bar", 0.85))
 
+    rows = api.load_dataset(dataset)
     id_to_human = {}
-    for r in rows:
-        if args.label_field in r:
-            b = calib.to_bool(r[args.label_field])
-            if b is not None:
-                id_to_human[r.get("id", "?")] = b
+    for row in rows:
+        if label_field in row:
+            value = calib.to_bool(row[label_field])
+            if value is not None:
+                id_to_human[row.get("id", "?")] = value
     if not id_to_human:
-        raise SystemExit(
-            f"[assevra] no usable '{args.label_field}' labels found in {args.dataset}."
-        )
+        _die(f"no usable '{label_field}' labels found in {dataset}.")
 
-    panel = _parse_panel(args.judge_panel)
-    judge = get_panel(panel) if panel else get_judge(args.judge_model)
+    panel = _parse_panel(args.judge_panel) or cfg.get("judge.panel", []) or None
+    try:
+        judge = build_judge(
+            provider=args.judge_provider or cfg.get("judge.provider", "auto"),
+            model=args.judge_model or cfg.get("judge.model", ""),
+            panel=panel,
+        )
+    except providers.ProviderError as exc:
+        _die(str(exc))
     if judge is None:
-        raise SystemExit(
-            "[assevra] calibration needs a judge (set ANTHROPIC_API_KEY and "
-            'install the judge extra: pip install "assevra[judge]").'
+        _die(
+            "calibration needs a judge. Configure a provider (e.g. set ANTHROPIC_API_KEY "
+            'and pip install "assevra[anthropic]"), or use --judge-provider mock to '
+            "exercise the plumbing offline."
         )
 
-    grouped = group_by_dimension(rows)
+    grouped = api.group_by_dimension(rows)
     per_dim_labels = {}
-    for dim in DIMENSION_ORDER:
-        if dim in JUDGE_DIMENSIONS and dim in grouped:
-            result = SCORERS[dim](grouped[dim], judge)
-            jl, hl = [], []
-            for rr in result.rows:
-                if rr.row_id in id_to_human:
-                    jl.append(bool(rr.passed))
-                    hl.append(id_to_human[rr.row_id])
-            if jl:
-                per_dim_labels[dim] = (jl, hl)
+    for name in registry.dimensions():
+        spec = registry.get_scorer(name)
+        if not spec.needs_judge or name not in grouped:
+            continue
+        result = spec.score(grouped[name], judge, cfg.scorer_options())
+        judged, human = [], []
+        for row_result in result.rows:
+            if row_result.row_id in id_to_human:
+                judged.append(bool(row_result.passed))
+                human.append(id_to_human[row_result.row_id])
+        if judged:
+            per_dim_labels[name] = (judged, human)
 
     if not per_dim_labels:
-        raise SystemExit(
-            "[assevra] no judge-dimension rows with human labels to calibrate "
-            "(need grounding/safety rows carrying the label field)."
+        _die(
+            "no judged-dimension rows carried human labels. Add the label field to "
+            "grounding/safety rows and re-run."
         )
 
-    all_j = [x for (jl, _) in per_dim_labels.values() for x in jl]
-    all_h = [x for (_, hl) in per_dim_labels.values() for x in hl]
-    overall = calib.compute(all_j, all_h)
-    per_dim = {d: calib.compute(jl, hl) for d, (jl, hl) in per_dim_labels.items()}
-    print(calib.render(overall, per_dim))
+    all_judged = [x for (j, _) in per_dim_labels.values() for x in j]
+    all_human = [x for (_, h) in per_dim_labels.values() for x in h]
+    overall = calib.compute(all_judged, all_human)
+    per_dim = {d: calib.compute(j, h) for d, (j, h) in per_dim_labels.items()}
+    print(calib.render(overall, per_dim, bar=bar))
     print(f"\n[assevra] judge: {judge.model}")
-    return 0 if overall.trustworthy else 1
+
+    if args.out:
+        payload = calib.to_artifact(
+            overall,
+            per_dim,
+            judge_model=judge.model,
+            judge_provider=getattr(judge, "provider", ""),
+            dataset=dataset,
+            label_field=label_field,
+            bar=bar,
+            assevra_version=ASSEVRA_VERSION,
+            generated_at=_now(),
+        )
+        Path(args.out).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        print(f"[assevra] wrote {args.out}")
+
+    return EXIT_OK if overall.trustworthy_at(bar) else EXIT_GATE_FAILED
+
+
+# --------------------------------------------------------------------------- #
+# Parser                                                                       #
+# --------------------------------------------------------------------------- #
+def _add_config_flag(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--config",
+        default=None,
+        metavar="PATH",
+        help=(
+            "path to .assevra.yml (default: found by walking up from the cwd); "
+            "pass 'none' to ignore any project config and use built-in defaults"
+        ),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="assevra",
         description=(
-            "Measure LLM-agent reliability with the Assevra Reliability Scorecard."
+            "Release evidence for AI agents: turn agent test runs into signed, "
+            "statistically defensible scorecards that gate every release."
         ),
+        epilog="Docs: https://assevra.ai/docs · Start with: assevra demo",
     )
+    parser.add_argument("--version", action="version", version=f"assevra {ASSEVRA_VERSION}")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    run = sub.add_parser("run", help="score a dataset and write a scorecard")
+    # -- run ---------------------------------------------------------------- #
+    run = sub.add_parser("run", help="score a dataset, gate the build, write the artifacts")
+    _add_config_flag(run)
+    run.add_argument("--dataset", default=None, help="JSONL dataset (default: from .assevra.yml)")
+    run.add_argument("--out-dir", default=None, help="where to write the artifacts")
     run.add_argument(
-        "--dataset",
-        required=True,
-        help="path to a JSONL dataset (see datasets/golden.jsonl)",
+        "--format",
+        action="append",
+        choices=["md", "markdown", "json", "html"],
+        default=None,
+        help="report format; repeatable (default: md, json, html)",
     )
     run.add_argument(
-        "--out-dir",
-        default=".",
-        help="directory to write scorecard.md and scorecard.json (default: .)",
+        "--judge-provider",
+        default=None,
+        choices=sorted(providers.PROVIDERS) + ["auto", "none"],
+        help="which vendor serves the judge (default: auto — the first with credentials)",
     )
-    run.add_argument(
-        "--judge-model",
-        default=DEFAULT_JUDGE_MODEL,
-        help=(
-            "judge model for the LLM-as-judge dimensions "
-            f"(default: {DEFAULT_JUDGE_MODEL}; use claude-sonnet-5 for volume)"
-        ),
-    )
+    run.add_argument("--judge-model", default=None, help="judge model (or deployment) name")
     run.add_argument(
         "--judge-panel",
         default=None,
         metavar="M1,M2,...",
-        help="comma-separated judge models to use as a jury (overrides --judge-model)",
+        help="comma-separated models to use as a jury; entries may be provider:model",
     )
     run.add_argument(
-        "--pass-k",
-        type=int,
-        default=2,
-        help="k for pass^k over repeated-trial cases (default: 2); needs case_id-grouped rows",
+        "--pass-k", type=int, default=None,
+        help="k for pass^k over repeated-trial cases sharing a case_id (default: 2)",
     )
     run.add_argument(
-        "--gate",
-        action="store_true",
-        help="exit non-zero if the scorecard fails (for CI gating)",
+        "--threshold", action="append", metavar="DIM=VALUE", default=None,
+        help="override a dimension's pass threshold; repeatable",
     )
+    run.add_argument("--gate", action="store_true", help="exit non-zero if the scorecard fails")
     run.add_argument(
-        "--sign",
-        metavar="KEYFILE",
-        default=None,
-        help="Ed25519 private key (PEM) to sign the scorecard; writes scorecard.sig.json",
+        "--fail-on-regression", action="store_true",
+        help="exit non-zero if a dimension regressed against the baseline",
     )
-    run.add_argument(
-        "--history",
-        metavar="PATH",
-        default=None,
-        help="append this run to a JSONL history file and compare against the last run",
-    )
-    run.add_argument(
-        "--label",
-        default=None,
-        help="label for this run in history (e.g. a git SHA or version)",
-    )
-    run.add_argument(
-        "--baseline",
-        default=None,
-        help="compare against the most recent history run with this label (default: the previous run)",
-    )
-    run.add_argument(
-        "--fail-on-regression",
-        action="store_true",
-        help="exit non-zero if a dimension regressed (fell below its prior 95%% interval or now fails)",
-    )
+    run.add_argument("--sign", metavar="KEYFILE", default=None, help="Ed25519 private key (PEM)")
+    run.add_argument("--attest", action="store_true", help="also write the Agent Card")
+    run.add_argument("--history", metavar="PATH", default=None, help="run-history JSONL file")
+    run.add_argument("--label", default=None, help="label for this run (e.g. a git SHA)")
+    run.add_argument("--baseline", default=None, help="compare against this labeled run")
+    run.add_argument("--strict", action="store_true", help="fail if any row carries no answer key")
+    run.add_argument("--no-validate", action="store_true", help="skip pre-flight validation")
+    run.add_argument("--quiet", action="store_true", help="do not print the full report")
     run.set_defaults(func=cmd_run)
 
-    boot = sub.add_parser(
-        "bootstrap",
-        help="draft a dataset from captured traces (removes the blank-page JSONL step)",
+    # -- validate ------------------------------------------------------------ #
+    val = sub.add_parser(
+        "validate", help="check a dataset before scoring it (LABELED / UNLABELED / INVALID)"
     )
-    boot.add_argument(
-        "--from",
-        dest="source",
-        required=True,
-        help="file of captured interactions (JSONL, JSON array, OTLP export, or CSV)",
+    _add_config_flag(val)
+    val.add_argument("dataset", nargs="?", default=None, help="JSONL dataset to check")
+    val.add_argument("--strict", action="store_true", help="treat unlabeled rows as failures")
+    val.add_argument("--all", action="store_true", help="list every row, not just the problems")
+    val.add_argument("--json", action="store_true", help="print the machine-readable report")
+    val.add_argument("--out", default=None, metavar="PATH", help="write the JSON report to a file")
+    val.set_defaults(func=cmd_validate)
+
+    # -- demo ---------------------------------------------------------------- #
+    demo = sub.add_parser("demo", help="run a full worked example — no clone, no key, no network")
+    demo.add_argument("--out-dir", default="assevra-demo", help="where to write the artifacts")
+    demo.add_argument(
+        "--provider", default="auto",
+        choices=sorted(providers.PROVIDERS) + ["auto", "none"],
+        help="judge provider; 'mock' runs the judged path deterministically offline",
     )
-    boot.add_argument(
-        "--out",
-        default="drafted.jsonl",
-        help="path to write the drafted dataset (default: drafted.jsonl)",
-    )
-    boot.add_argument(
-        "--format",
-        choices=["auto", "generic", "csv", "openai", "anthropic", "otel"],
-        default="auto",
-        help="input format (default: auto-detect)",
-    )
-    boot.add_argument(
-        "--dimension",
+    demo.add_argument("--judge-model", default=None, help="judge model name")
+    demo.set_defaults(func=cmd_demo)
+
+    # -- init ---------------------------------------------------------------- #
+    init = sub.add_parser("init", help="detect traces/framework/providers and scaffold everything")
+    init.add_argument("--root", default=".", help="project directory to inspect (default: .)")
+    init.add_argument("--from", dest="source", default=None, help="trace file to draft rows from")
+    init.add_argument("--dataset", default=None, help="where to write the drafted dataset")
+    init.add_argument(
+        "--dimension", default=bootstrap_mod.DEFAULT_DIMENSION,
         choices=sorted(bootstrap_mod._DIMENSION_TEMPLATE),
-        default=bootstrap_mod.DEFAULT_DIMENSION,
-        help=(
-            "dimension to assign drafted rows "
-            f"(default: {bootstrap_mod.DEFAULT_DIMENSION}); re-tag per row as needed"
-        ),
+        help="dimension to assign drafted rows",
+    )
+    init.add_argument("--limit", type=int, default=None, help="cap the number of drafted rows")
+    init.add_argument("--no-workflow", action="store_true", help="do not write a CI workflow")
+    init.add_argument("--no-docs", action="store_true", help="do not write EVALUATION.md")
+    init.add_argument("--force", action="store_true", help="overwrite existing files")
+    init.add_argument("--dry-run", action="store_true", help="show what would be written")
+    init.set_defaults(func=cmd_init)
+
+    # -- integrate ----------------------------------------------------------- #
+    integrate = sub.add_parser("integrate", help="wiring guide for the tool you already use")
+    integrate.add_argument("target", nargs="?", default=None, help=", ".join(integrations_mod.names()))
+    integrate.add_argument("--list", action="store_true", help="list the supported integrations")
+    integrate.add_argument("--dataset", default=None, help="dataset path to use in the snippets")
+    integrate.add_argument("--out", default=None, help="write the guide to a file")
+    integrate.set_defaults(func=cmd_integrate)
+
+    # -- schema -------------------------------------------------------------- #
+    schema = sub.add_parser("schema", help="print or export the published artifact contracts")
+    schema.add_argument("name", nargs="?", default=None, choices=list(schemas.NAMES) + [None])
+    schema.add_argument("--list", action="store_true", help="list the schemas and their URLs")
+    schema.add_argument("--out-dir", default=None, help="write every schema into a directory")
+    schema.set_defaults(func=cmd_schema)
+
+    # -- bootstrap ----------------------------------------------------------- #
+    boot = sub.add_parser("bootstrap", help="draft a dataset from captured traces")
+    boot.add_argument("--from", dest="source", required=True, help="file of captured interactions")
+    boot.add_argument("--out", default="drafted.jsonl", help="path to write the drafted dataset")
+    boot.add_argument(
+        "--format", choices=["auto", "generic", "csv", "openai", "anthropic", "otel"],
+        default="auto", help="input format (default: auto-detect)",
     )
     boot.add_argument(
-        "--limit", type=int, default=None, help="cap the number of drafted rows"
+        "--dimension", choices=sorted(bootstrap_mod._DIMENSION_TEMPLATE),
+        default=bootstrap_mod.DEFAULT_DIMENSION, help="dimension to assign drafted rows",
     )
-    boot.add_argument(
-        "--id-prefix", default="bootstrap", help="id prefix for drafted rows"
-    )
-    boot.add_argument(
-        "--input-field", default=None, help="generic format: field holding the user input"
-    )
-    boot.add_argument(
-        "--output-field", default=None, help="generic format: field holding the agent output"
-    )
-    boot.add_argument(
-        "--context-field", default=None, help="generic format: field holding the context"
-    )
+    boot.add_argument("--limit", type=int, default=None, help="cap the number of drafted rows")
+    boot.add_argument("--id-prefix", default="bootstrap", help="id prefix for drafted rows")
+    boot.add_argument("--input-field", default=None, help="generic: field holding the user input")
+    boot.add_argument("--output-field", default=None, help="generic: field holding the output")
+    boot.add_argument("--context-field", default=None, help="generic: field holding the context")
     boot.set_defaults(func=cmd_bootstrap)
 
-    keygen = sub.add_parser(
-        "keygen", help="generate an Ed25519 keypair for signing scorecards"
-    )
-    keygen.add_argument(
-        "--out-private",
-        default="assevra_ed25519_private.pem",
-        help="path for the private key (default: assevra_ed25519_private.pem)",
-    )
-    keygen.add_argument(
-        "--out-public",
-        default="assevra_ed25519_public.txt",
-        help="path for the public key (default: assevra_ed25519_public.txt)",
-    )
+    # -- keygen / sign / verify ---------------------------------------------- #
+    keygen = sub.add_parser("keygen", help="generate an Ed25519 keypair for signing scorecards")
+    keygen.add_argument("--out-private", default="assevra_ed25519_private.pem")
+    keygen.add_argument("--out-public", default="assevra_ed25519_public.txt")
     keygen.set_defaults(func=cmd_keygen)
 
-    sign = sub.add_parser(
-        "sign", help="sign a scorecard.json, producing a detached signature"
-    )
-    sign.add_argument("--scorecard", required=True, help="path to scorecard.json")
+    sign = sub.add_parser("sign", help="sign a scorecard.json, producing a detached signature")
+    sign.add_argument("--scorecard", required=True)
     sign.add_argument("--key", required=True, help="Ed25519 private key (PEM)")
-    sign.add_argument(
-        "--out", default=None, help="signature output path (default: <scorecard>.sig.json)"
-    )
-    sign.add_argument(
-        "--timestamp",
-        default=None,
-        help="ISO-8601 signing timestamp (default: current UTC time)",
-    )
+    sign.add_argument("--out", default=None, help="signature output path")
+    sign.add_argument("--timestamp", default=None, help="ISO-8601 signing timestamp")
     sign.set_defaults(func=cmd_sign)
 
-    verify = sub.add_parser(
-        "verify", help="verify a scorecard against its detached signature"
-    )
-    verify.add_argument("--scorecard", required=True, help="path to scorecard.json")
-    verify.add_argument("--signature", required=True, help="path to the .sig.json")
+    verify = sub.add_parser("verify", help="verify a scorecard against its detached signature")
+    verify.add_argument("--scorecard", required=True)
+    verify.add_argument("--signature", required=True)
     verify.add_argument(
-        "--public-key",
-        default=None,
-        help="pin the expected public key (a file path or the base64 string) to prove authorship",
+        "--public-key", default=None,
+        help="pin the expected public key (a path or the base64 string) to prove authorship",
     )
     verify.set_defaults(func=cmd_verify)
 
-    hist = sub.add_parser(
-        "history", help="show the reliability trend from a run-history file"
-    )
-    hist.add_argument("--history", required=True, help="path to the JSONL history file")
-    hist.add_argument(
-        "--limit", type=int, default=None, help="show only the last N runs"
-    )
+    # -- history ------------------------------------------------------------- #
+    hist = sub.add_parser("history", help="show the reliability trend across recorded runs")
+    _add_config_flag(hist)
+    hist.add_argument("--history", default=None, help="path to the JSONL history file")
+    hist.add_argument("--limit", type=int, default=None, help="show only the last N runs")
     hist.set_defaults(func=cmd_history)
 
+    # -- calibrate ----------------------------------------------------------- #
     cal = sub.add_parser(
-        "calibrate",
-        help="measure judge-vs-human agreement (Cohen's κ) on a labeled hold-out",
+        "calibrate", help="measure judge-vs-human agreement (Cohen's κ) on a labeled hold-out"
     )
-    cal.add_argument(
-        "--dataset", required=True, help="hold-out JSONL with a human label per row"
-    )
-    cal.add_argument(
-        "--label-field",
-        default="human_label",
-        help="row field holding the human pass/fail label (default: human_label)",
-    )
-    cal.add_argument(
-        "--judge-model", default=DEFAULT_JUDGE_MODEL, help="single judge model"
-    )
-    cal.add_argument(
-        "--judge-panel",
-        default=None,
-        metavar="M1,M2,...",
-        help="comma-separated judge models to use as a jury",
-    )
+    _add_config_flag(cal)
+    cal.add_argument("--dataset", default=None, help="hold-out JSONL with a human label per row")
+    cal.add_argument("--label-field", default=None, help="row field with the human verdict")
+    cal.add_argument("--judge-provider", default=None, choices=sorted(providers.PROVIDERS) + ["auto"])
+    cal.add_argument("--judge-model", default=None)
+    cal.add_argument("--judge-panel", default=None, metavar="M1,M2,...")
+    cal.add_argument("--out", default=None, help="write the calibration artifact (JSON) here")
     cal.set_defaults(func=cmd_calibrate)
 
-    att = sub.add_parser(
-        "attest",
-        help="map a scorecard to AI-governance control families (Agent Card)",
-    )
-    att.add_argument("--scorecard", required=True, help="path to scorecard.json")
-    att.add_argument(
-        "--signature",
-        default=None,
-        help="optional scorecard.sig.json, to note signed provenance on the card",
-    )
-    att.add_argument(
-        "--out-dir",
-        default=".",
-        help="directory to write agent-card.md and agent-card.json (default: .)",
-    )
+    # -- attest -------------------------------------------------------------- #
+    att = sub.add_parser("attest", help="map a scorecard to AI-governance control families")
+    att.add_argument("--scorecard", required=True)
+    att.add_argument("--signature", default=None, help="optional scorecard.sig.json")
+    att.add_argument("--out-dir", default=".", help="where to write the Agent Card")
     att.set_defaults(func=cmd_attest)
 
     return parser

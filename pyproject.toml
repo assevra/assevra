@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "assevra"
-version = "0.3.0"
-description = "A reference implementation and methodology for measuring the reliability of LLM agents (the Assevra Reliability Scorecard)."
+version = "0.4.0"
+description = "Release evidence for AI agents: turn agent test runs into signed, statistically defensible scorecards that gate every release."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -13,43 +13,86 @@ authors = [{ name = "Veera Ravindra Divi" }]
 keywords = [
     "llm",
     "ai-agents",
-    "reliability",
+    "agent-reliability",
     "evaluation",
     "llm-as-judge",
+    "ci-cd",
+    "release-gating",
+    "ai-governance",
+    "prompt-injection",
     "grounding",
     "pii",
     "safety",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
+    "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
 ]
-# The core (task-completion scorer, PII regex fallback, scorecard, CLI) has no
-# third-party dependencies. Optional extras below add the full engines.
+# The core -- every deterministic scorer, the config loader, the scorecard, the
+# schemas, and the whole CLI -- has NO third-party dependencies. That is a
+# feature, not an accident: `pip install assevra` must never be a negotiation
+# with a security team. Vendor SDKs live in the extras below.
 dependencies = []
 
 [project.optional-dependencies]
+# Detectors
 pii = ["presidio-analyzer>=2.2", "presidio-anonymizer>=2.2", "spacy>=3.7"]
-judge = ["anthropic>=0.40"]
+# Provenance
 sign = ["cryptography>=41"]
+# Judge providers -- one extra per vendor, so you install only what you use.
+anthropic = ["anthropic>=0.40"]
+openai = ["openai>=1.40"]
+azure = ["openai>=1.40"]
+bedrock = ["boto3>=1.34"]
+gemini = ["google-genai>=1.0"]
+# `judge` is kept as an alias for the pre-0.4 name.
+judge = ["anthropic>=0.40"]
+# Convenience
 all = [
     "presidio-analyzer>=2.2",
     "presidio-anonymizer>=2.2",
     "spacy>=3.7",
-    "anthropic>=0.40",
     "cryptography>=41",
+    "anthropic>=0.40",
+    "openai>=1.40",
+    "boto3>=1.34",
+    "google-genai>=1.0",
 ]
+dev = ["pytest>=8", "jsonschema>=4.20", "build>=1.2", "twine>=5"]
 
 [project.urls]
-Homepage = "https://github.com/assevra/assevra"
+Homepage = "https://assevra.ai"
+Documentation = "https://assevra.ai/docs"
+Source = "https://github.com/assevra/assevra"
 Methodology = "https://github.com/assevra/assevra/blob/main/METHODOLOGY.md"
+Changelog = "https://github.com/assevra/assevra/blob/main/CHANGELOG.md"
+Issues = "https://github.com/assevra/assevra/issues"
 
 [project.scripts]
 assevra = "assevra.cli:main"
 
 [tool.setuptools]
-packages = ["assevra", "assevra.scorers"]
+packages = ["assevra", "assevra.scorers", "assevra.providers", "assevra.schemas"]
+
+[tool.setuptools.package-data]
+# The published artifact contracts and the demo dataset ship inside the wheel:
+# `assevra demo` must work with no clone and no network.
+"assevra.schemas" = ["*.json"]
+"assevra" = ["data/*.jsonl"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "snapshot.py"]
+addopts = "-q"

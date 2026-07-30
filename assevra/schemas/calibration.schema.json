@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://assevra.ai/schema/v1/calibration.schema.json",
+  "title": "Assevra Judge Calibration Report",
+  "description": "Judge-vs-human agreement on a labeled hold-out. A judged dimension is only trustworthy once Cohen's kappa reaches the bar (default 0.85).",
+  "type": "object",
+  "required": ["schema_version", "assevra_version", "judge_model", "bar", "overall"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": { "type": "string" },
+    "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+    "assevra_version": { "type": "string" },
+    "generated_at": { "type": ["string", "null"] },
+    "dataset": { "type": ["string", "null"] },
+    "judge_model": { "type": "string" },
+    "judge_provider": { "type": ["string", "null"] },
+    "label_field": {
+      "type": "string",
+      "description": "Row field that carried the human verdict."
+    },
+    "bar": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Cohen's kappa threshold at or above which the judge is treated as trustworthy."
+    },
+    "overall": { "$ref": "#/$defs/calibration" },
+    "per_dimension": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/calibration" }
+    }
+  },
+  "$defs": {
+    "calibration": {
+      "type": "object",
+      "required": ["n", "accuracy", "cohens_kappa", "confusion", "trustworthy"],
+      "additionalProperties": true,
+      "properties": {
+        "n": { "type": "integer", "minimum": 0 },
+        "accuracy": { "type": "number", "minimum": 0, "maximum": 1 },
+        "cohens_kappa": {
+          "type": ["number", "null"],
+          "description": "Chance-corrected agreement. Null when undefined (n = 0)."
+        },
+        "sensitivity": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "specificity": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "confusion": {
+          "type": "object",
+          "required": ["tp", "fp", "tn", "fn"],
+          "additionalProperties": false,
+          "properties": {
+            "tp": { "type": "integer", "minimum": 0 },
+            "fp": { "type": "integer", "minimum": 0 },
+            "tn": { "type": "integer", "minimum": 0 },
+            "fn": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "trustworthy": { "type": "boolean" }
+      }
+    }
+  }
+}

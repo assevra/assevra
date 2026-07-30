@@ -1,76 +1,105 @@
 """
-Pluggable LLM-as-judge client for the grounding and safety dimensions.
+The LLM-as-judge layer: one judge, or a jury.
 
-The judge is deliberately thin and optional. If there is no API key, or the
-Anthropic SDK is not installed, `get_judge()` returns None and the judge
-dimensions are *skipped* (not failed) by the scorers -- so a fork with no
-secret still produces a scorecard from the deterministic dimensions.
+Two things sit here, and everything vendor-specific sits one level down in
+:mod:`assevra.providers`:
 
-Default judge models (override on the CLI with --judge-model):
-  - claude-opus-4-8   : primary judge (highest agreement)
-  - claude-sonnet-5   : volume judge (cheaper, for larger datasets)
+:class:`Judge`   a single model behind a pinned rubric. It sends a prompt, gets
+                 text back, and extracts the compact JSON verdict — tolerating
+                 the code fences and preambles models wrap around JSON, and
+                 surfacing genuinely unparseable output as a *finding* rather
+                 than swallowing it.
 
-The API key is read from the ANTHROPIC_API_KEY environment variable by the SDK.
-A judge score is only meaningful once you have shown judge-vs-human agreement on
-a labeled hold-out; that calibration step is described in METHODOLOGY.md and is
-deliberately NOT automated here.
+:class:`Panel`   several models voting as a jury. A panel agrees with humans more
+                 often than any single judge, and — the part that matters more —
+                 its *disagreement is itself the signal*. A split vote means the
+                 row is genuinely ambiguous, which is exactly the row a human
+                 should look at. Assevra reports that split instead of hiding it
+                 behind a median.
+
+Two invariants hold no matter which provider answers:
+
+* **No judge means skipped, never failed.** A fork with no API key still gets a
+  scorecard from the deterministic dimensions. A judged dimension that could not
+  run is reported as SKIPPED and does not gate — because a missing measurement is
+  not a passing one.
+* **A judge score is not evidence until it is calibrated.** Agreement with humans
+  on a labeled hold-out (Cohen's κ, bar 0.85) is what makes a judged number
+  citable; ``assevra calibrate`` measures it, and METHODOLOGY.md §4 explains why
+  the bar is there.
 """
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
+
+from . import providers
 
 DEFAULT_JUDGE_MODEL = "claude-opus-4-8"
 VOLUME_JUDGE_MODEL = "claude-sonnet-5"
 JUDGE_MAX_TOKENS = 512
 
 
+def _extract_json(raw: str) -> dict:
+    """Pull the verdict object out of whatever the model wrapped it in."""
+    text = raw.strip()
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        text = text[start : end + 1]
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return {"_parse_error": raw[:200]}
+
+
 @dataclass
 class Judge:
-    """A minimal wrapper over the Anthropic Messages API for scoring."""
+    """A single judge model behind a pinned rubric."""
 
     model: str
-    _client: object
+    complete: Callable[[str], str]
+    provider: str = ""
 
     def score_json(self, prompt: str) -> dict:
         """Send a prompt, expect compact JSON back, and parse it.
 
-        Unparseable judge output is a failure signal for the caller to handle,
-        not a silent pass -- we surface it as a dict with a `_parse_error` key.
+        Unparseable output is a failure signal for the caller to handle, not a
+        silent pass — it comes back as a dict carrying ``_parse_error``.
         """
-        msg = self._client.messages.create(
-            model=self.model,
-            max_tokens=JUDGE_MAX_TOKENS,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = msg.content[0].text.strip()
-        # Judges sometimes wrap JSON in prose or a code fence; extract the object.
-        start = raw.find("{")
-        end = raw.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            raw = raw[start : end + 1]
         try:
-            return json.loads(raw)
-        except (json.JSONDecodeError, ValueError):
-            return {"_parse_error": raw[:200]}
+            raw = self.complete(prompt)
+        except providers.ProviderError:
+            raise
+        except Exception as exc:  # provider SDKs raise their own error types
+            return {"_parse_error": f"judge call failed: {type(exc).__name__}: {exc}"[:200]}
+        return _extract_json(raw or "")
 
 
-def get_judge(model: str = DEFAULT_JUDGE_MODEL) -> Optional[Judge]:
-    """Build a Judge, or return None when no judge is available.
+def build_judge(
+    provider: str = "auto",
+    model: str = "",
+    panel: Optional[list] = None,
+    **opts,
+):
+    """Build a :class:`Judge`, a :class:`Panel`, or None.
 
-    None is returned (and the caller skips the dimension) when either:
-      - ANTHROPIC_API_KEY is unset, or
-      - the `anthropic` package is not installed.
+    None means "no judge is available" — the caller skips its judged dimensions
+    rather than failing them. That is the difference between a fork without
+    secrets getting a partial, honest scorecard and getting a red build.
     """
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    if panel:
+        return build_panel(panel, provider=provider, **opts)
+    name, chosen = providers.resolve(provider, model)
+    if name is None:
         return None
-    try:
-        from anthropic import Anthropic
-    except ImportError:
-        return None
-    return Judge(model=model, _client=Anthropic())
+    complete = providers.build(name, chosen, **opts)
+    return Judge(model=chosen, complete=complete, provider=name)
+
+
+def get_judge(model: str = "", provider: str = "auto", **opts) -> Optional[Judge]:
+    """Backwards-compatible entry point: a single judge, or None."""
+    return build_judge(provider=provider, model=model, **opts)
 
 
 def _median_int(values: list) -> int:
@@ -82,20 +111,32 @@ def _median_int(values: list) -> int:
 
 @dataclass
 class Panel:
-    """A jury of judges. A panel of several models agrees with humans more often
-    than any single judge and, crucially, its *disagreement* is itself a signal
-    (a split vote flags a genuinely ambiguous row). The panel exposes the same
-    ``score_json`` interface as a single Judge, so scorers use it unchanged; it
-    aggregates whichever verdict field the panelists return (a 1-5 ``score`` by
-    median, a boolean ``refused`` by majority) and attaches the raw panelist
-    votes so disagreement can be surfaced."""
+    """A jury of judges.
+
+    Exposes the same ``score_json`` interface as a single :class:`Judge`, so
+    scorers use it unchanged. It aggregates whichever verdict field the panelists
+    return — a 1–5 ``score`` by median, a boolean ``refused``/``followed`` by
+    majority — and attaches the raw panelist votes so disagreement can be
+    surfaced in the report rather than averaged away.
+    """
 
     models: list
     judges: list
+    provider: str = ""
 
     @property
     def model(self) -> str:
         return "panel[" + ",".join(self.models) + "]"
+
+    @staticmethod
+    def _majority(results: list, key: str, out: dict, reasons: list) -> None:
+        votes = [bool(r[key]) for r in results if key in r]
+        if not votes:
+            return
+        yes = sum(votes)
+        out[key] = yes * 2 > len(votes)  # ties resolve to False
+        out[f"panel_{key}"] = votes
+        out.setdefault("reason", reasons[0] if reasons else "")
 
     def score_json(self, prompt: str) -> dict:
         results = [j.score_json(prompt) for j in self.judges]
@@ -121,30 +162,46 @@ class Panel:
                 (rs for sc, rs in zip(scores, reasons) if sc == agg), reasons[0]
             )
 
-        refused = [bool(r["refused"]) for r in valid if "refused" in r]
-        if refused:
-            yes = sum(refused)
-            out["refused"] = yes * 2 > len(refused)  # majority; ties -> not refused
-            out["panel_refused"] = refused
-            out.setdefault("reason", reasons[0] if reasons else "")
+        self._majority(valid, "refused", out, reasons)
+        self._majority(valid, "followed", out, reasons)
 
-        if "score" not in out and "refused" not in out:
+        if not ({"score", "refused", "followed"} & set(out)):
             return {"_parse_error": "panelists returned no usable verdict field"}
         return out
 
 
-def get_panel(models: list) -> Optional[Panel]:
-    """Build a Panel over several judge models sharing one client, or None when
-    no judge is available (same conditions as get_judge)."""
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+def build_panel(models: list, provider: str = "auto", **opts) -> Optional[Panel]:
+    """Build a Panel over several judge models, or None when none is available.
+
+    Panelists may name their provider inline as ``provider:model`` — so a jury
+    can span vendors, which is the strongest form of the idea: three models from
+    one lab share failure modes; three models from three labs do not.
+    """
+    judges, names, resolved_provider = [], [], ""
+    for entry in models:
+        spec = str(entry).strip()
+        if not spec:
+            continue
+        if ":" in spec and spec.split(":", 1)[0] in providers.PROVIDERS:
+            this_provider, model = spec.split(":", 1)
+        else:
+            this_provider, model = provider, spec
+        name, chosen = providers.resolve(this_provider, model)
+        if name is None:
+            continue
+        judges.append(
+            Judge(model=chosen, complete=providers.build(name, chosen, **opts), provider=name)
+        )
+        names.append(spec if ":" in spec else chosen)
+        resolved_provider = resolved_provider or name
+    if not judges:
         return None
-    try:
-        from anthropic import Anthropic
-    except ImportError:
-        return None
-    client = Anthropic()
-    judges = [Judge(model=m, _client=client) for m in models]
-    return Panel(models=list(models), judges=judges)
+    return Panel(models=names, judges=judges, provider=resolved_provider)
+
+
+def get_panel(models: list, provider: str = "auto", **opts) -> Optional[Panel]:
+    """Backwards-compatible entry point for building a jury."""
+    return build_panel(models, provider=provider, **opts)
 
 
 def panel_note(parsed: dict) -> str:
@@ -155,8 +212,9 @@ def panel_note(parsed: dict) -> str:
         s = parsed["panel_scores"]
         spread = max(s) - min(s)
         parts.append(f"panel {s}" + (f" DISAGREE(spread={spread})" if spread >= 2 else ""))
-    if "panel_refused" in parsed:
-        r = parsed["panel_refused"]
-        unanimous = all(r) or not any(r)
-        parts.append("panel refused " + str(r) + ("" if unanimous else " DISAGREE"))
+    for key in ("refused", "followed"):
+        votes = parsed.get(f"panel_{key}")
+        if votes:
+            unanimous = all(votes) or not any(votes)
+            parts.append(f"panel {key} {votes}" + ("" if unanimous else " DISAGREE"))
     return (" · " + "; ".join(parts)) if parts else ""

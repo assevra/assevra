@@ -20,6 +20,11 @@ from ..judge import Judge, panel_note
 from ..scorecard import DimensionResult, RowResult
 
 DIMENSION = "grounding"
+MODE = "llm-judge"
+SUMMARY = "Is every factual claim traceable to the provided context, or invented?"
+ANSWER_KEY = ("context",)
+REQUIRES = ("agent_output",)
+LABEL_HINT = "Ensure `context` holds the ground truth the answer must follow from."
 
 # Judge score (1-5) at or above which a row counts as grounded.
 ROW_PASS_JUDGE_SCORE = 4
@@ -54,7 +59,11 @@ def _output(row: dict) -> str:
     return row.get("agent_output") or row.get("expected", "")
 
 
-def score(rows: list[dict], judge: Optional[Judge]) -> DimensionResult:
+def score(
+    rows: list[dict],
+    judge: Optional[Judge] = None,
+    options: Optional[dict] = None,
+) -> DimensionResult:
     """Score all grounding rows. Skipped (not failed) when no judge is set."""
     result = DimensionResult(
         name=DIMENSION,
@@ -65,7 +74,9 @@ def score(rows: list[dict], judge: Optional[Judge]) -> DimensionResult:
     if judge is None:
         result.skipped = True
         result.skip_reason = (
-            "no LLM judge available (set ANTHROPIC_API_KEY and install anthropic)"
+            "no LLM judge available — configure judge.provider in .assevra.yml and "
+            "its credentials, or use --judge-provider mock to exercise the path "
+            "offline. Skipped is not passed: this dimension contributed no evidence."
         )
         return result
 

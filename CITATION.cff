@@ -3,16 +3,22 @@ message: "If you use Assevra or report a score measured with it, please cite thi
 title: "Assevra: A Reliability Scorecard for LLM Agents"
 abstract: >-
   Assevra is an open reference implementation and a named methodology (the
-  Assevra Reliability Scorecard) for measuring the reliability of LLM agents
-  across four dimensions: grounding/faithfulness, safety/refusal, PII-leak, and
-  task-completion. Each dimension is scored with an explicit method (LLM-as-judge
-  or deterministic), a stated pass threshold, and a reported confidence interval.
+  Assevra Reliability Scorecard) that turns agent test runs into signed,
+  statistically defensible release evidence. It scores an agent across nine
+  dimensions - grounding/faithfulness, safety/refusal, PII-leak, task-completion,
+  tool-call validation, action correctness, prompt-injection resistance, cost, and
+  latency - each with an explicit scoring method (deterministic where a rule can
+  decide it, LLM-as-judge only where judgment is irreducible), a stated pass
+  threshold, and a 95% Wilson confidence interval reported alongside the sample
+  size. It also reports pass^k and run-to-run consistency over repeated trials.
+  The output is a portable, schema-governed artifact that can be cryptographically
+  signed and mapped to AI-governance control families.
 type: software
 authors:
   - family-names: Divi
     given-names: Veera Ravindra
-version: "0.3.0"
-date-released: "2026-07-05"
+version: "0.4.0"
+date-released: "2026-07-29"
 license: MIT
 doi: 10.5281/zenodo.21200852
 identifiers:
@@ -26,9 +32,13 @@ repository-code: "https://github.com/assevra/assevra"
 keywords:
   - LLM
   - AI agents
-  - reliability
+  - agent reliability
+  - release evidence
   - evaluation
   - LLM-as-judge
+  - judge calibration
+  - prompt injection
   - grounding
   - PII
   - safety
+  - AI governance

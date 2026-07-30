@@ -18,10 +18,11 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from . import reliability as _reliability
+from . import schemas as _schemas
 
 # Bump this when a change to a scorer or rubric would change a reported number.
-# Report scores as "measured with Assevra v0.1".
-ASSEVRA_VERSION = "0.3"
+# Report scores as "measured with Assevra v0.4".
+ASSEVRA_VERSION = "0.4"
 
 # Citation provenance. Stamped into every report so attribution travels with the
 # artifact: anyone who shares a scorecard carries the DOI with it. Concept DOI
@@ -137,9 +138,28 @@ class Scorecard:
     # Per-dimension pass^k / consistency over repeated-trial cases. Empty unless
     # the dataset groups trials with a shared case_id.
     reliability: list = field(default_factory=list)
+    # Provenance a reader needs to trust the artifact six months from now: which
+    # provider judged, exactly which dataset bytes were scored, and when.
+    judge_provider: str = ""
+    dataset_sha256: Optional[str] = None
+    generated_at: Optional[str] = None
 
     def scored_dimensions(self) -> list[DimensionResult]:
         return [d for d in self.dimensions if not d.skipped]
+
+    def dimension(self, name: str) -> Optional[DimensionResult]:
+        """One dimension by name, or None if the dataset had no rows for it."""
+        return next((d for d in self.dimensions if d.name == name), None)
+
+    def failures(self) -> list[tuple[str, RowResult]]:
+        """Every failing row, as (dimension, row) — what a reviewer reads first."""
+        return [
+            (d.name, r)
+            for d in self.dimensions
+            if not d.skipped
+            for r in d.rows
+            if not r.passed
+        ]
 
     @property
     def overall_pass(self) -> bool:
@@ -154,10 +174,19 @@ class Scorecard:
         return all(d.passed for d in scored)
 
     def to_dict(self) -> dict:
+        """The artifact. Shape is governed by the published JSON schema.
+
+        The ``$schema`` and ``schema_version`` keys make the file
+        self-describing: a consumer six months from now can tell what it is
+        holding, and validate it, without knowing which Assevra wrote it.
+        """
         d = {
             "assevra_version": self.version,
+            "generated_at": self.generated_at,
             "dataset": self.dataset,
+            "dataset_sha256": self.dataset_sha256,
             "judge_model": self.judge_model,
+            "judge_provider": self.judge_provider or None,
             "overall_pass": self.overall_pass,
             "dimensions": [dim.to_dict() for dim in self.dimensions],
         }
@@ -165,7 +194,7 @@ class Scorecard:
         # single-trial scorecards keep their exact shape.
         if self.reliability:
             d["reliability"] = [r.to_dict() for r in self.reliability]
-        return d
+        return _schemas.stamp(d, "scorecard")
 
     def to_json(self, indent: int = 2) -> str:
         return json.dumps(self.to_dict(), indent=indent)
@@ -183,9 +212,11 @@ class Scorecard:
     # The scope note printed at the foot of every report, in both formats.
     _SCOPE_NOTE = (
         "Reliability is reported as a per-dimension pass rate against a fixed "
-        "threshold, with a 95% Wilson interval on a small labeled dataset. This "
-        "scorecard does not certify safety; it measures four specific properties "
-        "on the rows provided. See METHODOLOGY.md for scope and limitations."
+        "threshold, with a 95% Wilson interval and the sample size it came from. "
+        "This scorecard does not certify safety: it measures the specific "
+        "properties listed above, on the rows provided, and nothing else. A "
+        "SKIPPED dimension contributed no evidence and is not a pass. See "
+        "METHODOLOGY.md for the per-dimension scope and limitations."
     )
 
     def render_markdown(self) -> str:
@@ -228,7 +259,12 @@ class Scorecard:
                 lines.append("")
             for r in d.rows:
                 flag = "PASS" if r.passed else "FAIL"
-                extra = f" (judge={r.raw_score})" if r.raw_score is not None else ""
+                # `raw_score` means a judge verdict on a judged dimension and a
+                # measured quantity (dollars, milliseconds) on a deterministic
+                # one — label it for what it is rather than calling both "judge".
+                extra = ""
+                if r.raw_score is not None and d.mode == "llm-judge":
+                    extra = f" (judge={r.raw_score})"
                 lines.append(f"- `[{flag}]` `{r.row_id}`{extra} — {r.detail}")
             lines.append("")
 
@@ -310,7 +346,11 @@ class Scorecard:
             items = []
             for r in shown:
                 dot = "pass" if r.passed else "fail"
-                extra = f" <span class='raw'>judge={esc(str(r.raw_score))}</span>" if r.raw_score is not None else ""
+                extra = (
+                    f" <span class='raw'>judge={esc(str(r.raw_score))}</span>"
+                    if r.raw_score is not None and d.mode == "llm-judge"
+                    else ""
+                )
                 items.append(
                     f"<li><span class='dot dot-{dot}'></span>"
                     f"<code>{esc(r.row_id)}</code>{extra} "
@@ -328,6 +368,19 @@ class Scorecard:
         dataset = esc(self.dataset or "n/a")
         judge = esc(self.judge_model or "none (judge dimensions skipped)")
 
+        # Provenance a reviewer can act on: exactly which bytes were scored, and
+        # when. Without it, "the scorecard says 0.94" is unanchored.
+        provenance = []
+        if self.generated_at:
+            provenance.append(f"generated {esc(self.generated_at[:19])}Z")
+        if self.dataset_sha256:
+            provenance.append(f"dataset sha256 <code>{esc(self.dataset_sha256[:12])}…</code>")
+        if self.judge_provider:
+            provenance.append(f"provider <code>{esc(self.judge_provider)}</code>")
+        provenance_html = (
+            f"<div class='head-meta'>{' &middot; '.join(provenance)}</div>" if provenance else ""
+        )
+
         return _HTML_TEMPLATE.format(
             version=esc(self.version),
             overall=overall,
@@ -343,6 +396,9 @@ class Scorecard:
             reliability=_reliability.render_html_section(self.reliability, esc),
             scope_note=esc(self._SCOPE_NOTE),
             doi=esc(ASSEVRA_DOI),
+            provenance=provenance_html,
+            schema_url=esc(_schemas.schema_url("scorecard")),
+            schema_version=esc(_schemas.SCHEMA_VERSION),
         )
 
     @staticmethod
@@ -503,6 +559,7 @@ _HTML_TEMPLATE = """<!doctype html>
       </div>
       <div class="head-meta">Measured with Assevra v{version} &middot;
         dataset <code>{dataset}</code> &middot; judge <code>{judge}</code></div>
+      {provenance}
     </div>
 
     <div class="body">
@@ -538,7 +595,9 @@ _HTML_TEMPLATE = """<!doctype html>
 
       <footer>{scope_note}<br>
         Generated by <a href="https://github.com/assevra/assevra">Assevra</a>
-        v{version} &middot; an open reference implementation of the Assevra Reliability Scorecard.<br>
+        v{version} &middot; release evidence for AI agents.
+        The machine-readable form of this report conforms to
+        <a href="{schema_url}">scorecard schema v{schema_version}</a>.<br>
         If you report or share this scorecard, cite:
         <a href="https://doi.org/{doi}">doi.org/{doi}</a></footer>
     </div>

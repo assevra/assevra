@@ -1,0 +1,243 @@
+name: ci
+
+# The full pre-merge pipeline. Ten checks, in cost order — the cheap ones fail
+# fast, and the expensive ones only run when there is something worth spending
+# them on.
+#
+# The one that matters most is `contracts`: Assevra's most valuable output is not
+# the CLI, it is the artifact. If a scorecard someone parsed last year stops
+# validating against the published schema, that is a breaking change to a
+# published contract, and CI should catch it before a release does.
+#
+# Everything here runs with no API key. The judged half of the engine is covered
+# by the deterministic mock provider, so a pull request from a fork gets exactly
+# the same signal as one from a maintainer.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 1 + 2. Unit tests across every supported Python.
+  unit:
+    name: unit (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install (core only — the core must stay dependency-free)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest jsonschema
+      - name: Assert the core imports with no third-party packages
+        run: |
+          python - <<'PY'
+          import importlib, sys
+          for name in ("anthropic", "openai", "presidio_analyzer", "yaml", "boto3"):
+              assert name not in sys.modules, f"{name} imported at module load"
+          import assevra
+          assert assevra.evaluate is not None
+          print("core imports clean:", assevra.__version__)
+          PY
+      - name: Unit tests
+        run: python -m pytest tests/ -q
+
+  # 3 + 4. Integration: the whole CLI arc, judged path included, via the mock judge.
+  integration:
+    name: integration (mock judge)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[sign]" && pip install pytest jsonschema
+      - name: CLI end-to-end
+        run: python -m pytest tests/test_cli.py -q
+      - name: The judged pipeline, offline and deterministic
+        run: |
+          assevra demo --out-dir /tmp/demo --provider mock
+          python - <<'PY'
+          import json
+          card = json.load(open("/tmp/demo/scorecard.json"))
+          assert card["judge_model"] == "mock-judge"
+          judged = [d for d in card["dimensions"] if d["mode"] == "llm-judge"]
+          assert judged and not any(d["skipped"] for d in judged), "judged path did not run"
+          print("judged dimensions exercised:", [d["name"] for d in judged])
+          PY
+      - name: Calibration runs against the mock judge
+        run: |
+          python - <<'PY'
+          import json
+          rows = [json.loads(l) for l in open("assevra/data/demo.jsonl") if l.strip()]
+          out = []
+          for row in rows:
+              if row["dimension"] in ("grounding", "safety"):
+                  out.append({**row, "human_label": "pass"})
+          with open("/tmp/holdout.jsonl", "w") as fh:
+              for row in out:
+                  fh.write(json.dumps(row) + "\n")
+          PY
+          assevra calibrate --dataset /tmp/holdout.jsonl --judge-provider mock \
+            --out /tmp/calibration.json --config none
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-artifacts
+          path: |
+            /tmp/demo/
+            /tmp/calibration.json
+          if-no-files-found: warn
+
+  # 5 + 6. The package builds, installs clean from the wheel, and works.
+  package:
+    name: build + install smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --upgrade pip build twine
+      - name: Build the sdist and wheel
+        run: python -m build
+      - name: Check the package metadata
+        run: twine check dist/*
+      - name: Install the wheel into a clean venv and run the demo from it
+        run: |
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install --upgrade pip
+          /tmp/smoke/bin/pip install dist/*.whl
+          cd /tmp                                   # nowhere near the source tree
+          /tmp/smoke/bin/assevra --version
+          /tmp/smoke/bin/assevra demo --out-dir /tmp/wheel-demo --provider mock
+          test -s /tmp/wheel-demo/scorecard.html
+          test -s /tmp/wheel-demo/agent-card.json
+          echo "the bundled dataset and schemas ship inside the wheel"
+      - name: Assert the schemas are packaged, not just present in git
+        run: |
+          /tmp/smoke/bin/python -c "
+          from assevra import schemas
+          for name in schemas.NAMES:
+              assert schemas.load(name)['\$id'].endswith(name + '.schema.json')
+          print('all', len(schemas.NAMES), 'schemas packaged')
+          "
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # 7 + 8. The published artifact contracts, and the HTML report.
+  contracts:
+    name: artifact contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e . && pip install jsonschema pytest
+      - name: Every emitted artifact validates against its published schema
+        run: python -m pytest tests/test_schemas.py -q
+      - name: The site serves the same schemas the package ships
+        run: |
+          python - <<'PY'
+          import filecmp, pathlib, sys
+          from assevra import schemas
+          served = pathlib.Path("web/public/schema/v1")
+          missing = []
+          for name in schemas.NAMES:
+              target = served / f"{name}.schema.json"
+              if not target.exists():
+                  missing.append(str(target)); continue
+              if not filecmp.cmp(schemas.schema_path(name), target, shallow=False):
+                  missing.append(f"{target} differs from the packaged schema")
+          if missing:
+              print("\n".join(missing)); sys.exit(1)
+          print("the published URLs and the package agree")
+          PY
+      - name: The HTML report renders self-contained
+        run: |
+          assevra demo --out-dir /tmp/html --provider mock
+          python - <<'PY'
+          import re
+          html = open("/tmp/html/scorecard.html", encoding="utf-8").read()
+          # The two disciplines the report exists to make visible.
+          assert "95% CI" in html, "the report must show the interval, not just the mean"
+          assert "Wilson" in html, "the report must name the interval it used"
+          # A shareable artifact must not depend on a network it may not have.
+          external = re.findall(r'(?:src|href)="(https?://[^"]+)"', html)
+          allowed = [u for u in external if u.startswith(("https://github.com/assevra",
+                                                          "https://doi.org/",
+                                                          "https://assevra.ai/"))]
+          assert set(external) == set(allowed), f"unexpected external assets: {set(external) - set(allowed)}"
+          assert "<script" not in html.lower(), "the report must contain no scripts"
+          print(f"self-contained: {len(html)} bytes, {len(external)} outbound links, 0 assets")
+          PY
+
+  # 9. Golden snapshot: the numbers must not move without someone saying so.
+  snapshot:
+    name: golden snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: Compare against the committed snapshot
+        run: python tests/snapshot.py --check
+
+  # 10. Dogfood: gate this repository on its own scorer.
+  dogfood:
+    name: dogfood the gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [unit]
+    env:
+      # Empty on forks by design: judged dimensions are then SKIPPED, not failed.
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install with the full PII detector
+        run: |
+          pip install -e ".[pii,sign]"
+          python -m spacy download en_core_web_lg
+      - name: Install the judge SDK when a key is configured
+        if: env.ANTHROPIC_API_KEY != ''
+        run: pip install -e ".[anthropic]"
+      - name: Validate the golden dataset before scoring it
+        run: assevra validate datasets/golden.jsonl --strict
+      - name: Score, gate, and attest
+        run: assevra run --gate --attest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scorecard
+          path: |
+            .assevra/out/
+          if-no-files-found: warn

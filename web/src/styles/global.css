@@ -123,6 +123,20 @@ a {
   max-width: var(--width-content);
   margin-inline: auto;
   padding-inline: 1.5rem;
+  min-width: 0;
+}
+
+/* A grid/flex item defaults to `min-width: auto`, so one unbreakable child — a
+   long shell command, a mono badge — silently forces its whole column wider than
+   the phone it is being read on. Opt every layout child out of that. */
+.container > *,
+.hero-in > *,
+.cta-in > *,
+.sign-split > *,
+.ci-split > *,
+.integ-split > *,
+.sc-split > * {
+  min-width: 0;
 }
 .section {
   padding-block: clamp(3rem, 2rem + 5vw, 6rem);
@@ -131,9 +145,12 @@ a {
   font-family: var(--font-mono);
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  font-size: 1.1rem;
+  /* Uppercase mono with wide tracking gets very wide very fast; scale it with
+     the viewport so it never forces a phone-width column open. */
+  font-size: clamp(0.8rem, 0.62rem + 0.7vw, 1.1rem);
   font-weight: 600;
   color: var(--brand);
+  overflow-wrap: anywhere;
 }
 .section-title {
   font-size: clamp(1.7rem, 1.2rem + 2.4vw, 2.6rem);

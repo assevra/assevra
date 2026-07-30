@@ -29,6 +29,8 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
+from . import schemas
+
 
 @dataclass
 class Mapping:
@@ -159,7 +161,7 @@ def build_card_dict(scorecard: dict, signature: dict = None, generated_at: str =
             "content_sha256": signature.get("content_sha256"),
             "signed_at": signature.get("signed_at"),
         }
-    return card
+    return schemas.stamp(card, "agent-card")
 
 
 def render_json(card: dict) -> str:

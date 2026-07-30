@@ -462,3 +462,14 @@ def write_dataset(rows: list[dict], out_path: str) -> None:
     with open(out_path, "w", encoding="utf-8") as fh:
         for row in rows:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+# The built-in trace adapters, exposed through the registry so a team with a
+# house trace format can add theirs with `assevra.register_adapter(...)` and have
+# `bootstrap --format <name>` pick it up.
+from . import registry as _registry  # noqa: E402  (circular-import hygiene)
+
+_registry.register_adapter("generic", _extract_generic, replace=True)
+_registry.register_adapter("openai", _extract_openai, replace=True)
+_registry.register_adapter("anthropic", _extract_anthropic, replace=True)
+_registry.register_adapter("otel", _extract_otel, replace=True)

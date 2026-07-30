@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://assevra.ai/schema/v1/dataset.schema.json",
+  "title": "Assevra dataset row",
+  "description": "One line of an Assevra JSONL dataset. Every row declares the dimension that scores it; the answer-key fields required depend on that dimension. A row that parses but carries no answer key is UNLABELED, not INVALID — `assevra validate` reports the difference.",
+  "type": "object",
+  "required": ["id", "dimension"],
+  "additionalProperties": true,
+  "properties": {
+    "id": { "type": "string", "minLength": 1, "description": "Unique row id." },
+    "case_id": {
+      "type": "string",
+      "description": "Groups repeated trials of the same logical case, enabling pass^k and consistency."
+    },
+    "dimension": {
+      "type": "string",
+      "description": "Routes the row to its scorer.",
+      "examples": [
+        "grounding",
+        "safety",
+        "pii",
+        "task_completion",
+        "tool_call",
+        "action_correctness",
+        "injection",
+        "cost",
+        "latency"
+      ]
+    },
+    "input": { "type": "string", "description": "What the user asked the agent." },
+    "context": {
+      "type": "string",
+      "description": "Ground truth the agent had access to. Required in substance for grounding."
+    },
+    "agent_output": {
+      "type": "string",
+      "description": "What the agent actually produced — the text being graded."
+    },
+    "tags": { "type": "array", "items": { "type": "string" } },
+
+    "must_include": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "task_completion: strings a correct output must contain."
+    },
+    "should_refuse": {
+      "type": "boolean",
+      "description": "safety: true if the agent must refuse this request."
+    },
+    "sanctioned_field": {
+      "type": "string",
+      "description": "pii: a value allowed to appear in the output; any other sensitive value is a leak."
+    },
+
+    "tool_calls": {
+      "type": "array",
+      "description": "tool_call / action_correctness: the calls the agent actually made.",
+      "items": { "$ref": "#/$defs/tool_call" }
+    },
+    "allowed_tools": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "tool_call: the only tools the agent is permitted to call."
+    },
+    "forbidden_tools": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "tool_call: tools that must never be called in this case."
+    },
+    "expected_tool_calls": {
+      "type": "array",
+      "description": "tool_call: required calls, each with the arguments that must match.",
+      "items": { "$ref": "#/$defs/tool_call" }
+    },
+    "tool_schemas": {
+      "type": "object",
+      "description": "tool_call: per-tool argument contract {tool: {required: [...], types: {arg: type}}}.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "required": { "type": "array", "items": { "type": "string" } },
+          "types": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "enum": ["string", "number", "integer", "boolean", "array", "object"]
+            }
+          },
+          "enum": {
+            "type": "object",
+            "additionalProperties": { "type": "array" }
+          }
+        }
+      }
+    },
+
+    "expected_actions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "action_correctness: the action(s) a correct run must take, in order."
+    },
+    "agent_actions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "action_correctness: the action(s) the agent actually took. Defaults to tool_calls names."
+    },
+    "forbidden_actions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "action_correctness: actions that must not occur."
+    },
+    "action_match": {
+      "type": "string",
+      "enum": ["exact", "ordered", "set"],
+      "default": "ordered",
+      "description": "How expected_actions is compared to agent_actions."
+    },
+
+    "injection": {
+      "type": "string",
+      "description": "injection: the injected instruction planted in the input or context."
+    },
+    "canary": {
+      "type": "string",
+      "description": "injection: a string that only appears if the agent obeyed the injection."
+    },
+    "must_not_include": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "injection: strings whose presence proves the injection succeeded."
+    },
+
+    "cost_usd": { "type": "number", "minimum": 0, "description": "cost: measured cost of the run." },
+    "cost_budget_usd": { "type": "number", "minimum": 0, "description": "cost: per-row budget." },
+    "usage": {
+      "type": "object",
+      "description": "cost: token usage, priced with the config's price table when cost_usd is absent.",
+      "additionalProperties": true,
+      "properties": {
+        "input_tokens": { "type": "integer", "minimum": 0 },
+        "output_tokens": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "latency_ms": { "type": "number", "minimum": 0, "description": "latency: measured wall-clock latency." },
+    "latency_budget_ms": { "type": "number", "minimum": 0, "description": "latency: per-row budget." },
+
+    "human_label": {
+      "description": "Calibration hold-out: the human pass/fail verdict for this row.",
+      "type": ["boolean", "string", "integer"]
+    }
+  },
+  "$defs": {
+    "tool_call": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "arguments": {
+          "description": "Call arguments as an object, or the raw JSON string the model emitted.",
+          "type": ["object", "string", "null"]
+        }
+      }
+    }
+  }
+}
