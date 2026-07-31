@@ -4,7 +4,7 @@ All notable changes to Assevra are recorded here. The project follows
 semantic-ish versioning; the reported "measured with Assevra vX.Y" number is
 bumped whenever a scorer or rubric change could change a reported score.
 
-## [0.4.0] — 2026-07-29
+## [0.4.0] — 2026-07-31
 
 The adoption release. 0.1–0.3 were about making the *measurement* honest; 0.4 is
 about making it something a team can actually adopt on a Tuesday afternoon. The
