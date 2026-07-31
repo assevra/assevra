@@ -36,3 +36,6 @@ web/.astro/
 .vscode/
 .idea/
 .DS_Store
+
+# The wheel /try runs in the browser — built by the Pages workflow, not committed.
+web/public/*.whl

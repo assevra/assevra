@@ -25,6 +25,7 @@ export const NAV: NavSection[] = [
     items: [
       { label: 'Overview', href: '/docs' },
       { label: 'Getting started', href: '/docs/getting-started' },
+      { label: 'Zero-label scoring', href: '/docs/zero-label' },
       { label: 'Concepts', href: '/docs/concepts' },
     ],
   },

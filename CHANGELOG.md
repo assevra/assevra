@@ -4,6 +4,78 @@ All notable changes to Assevra are recorded here. The project follows
 semantic-ish versioning; the reported "measured with Assevra vX.Y" number is
 bumped whenever a scorer or rubric change could change a reported score.
 
+## [0.5.0] — 2026-07-31
+
+The zero-label release. 0.4 made Assevra adoptable in about five minutes of
+*plumbing* — and then asked for an afternoon of labeling before the numbers meant
+anything. 0.5 attacks the afternoon, on a single observation: **six of the nine
+dimensions never needed a human.**
+
+### Added
+
+- **`assevra scan --from traces.jsonl`** — a scorecard from raw traces with
+  nothing labeled. It scores PII leakage (self-labeling), grounding (the answer
+  key is the captured context), cost and latency (governed by a budget, which is
+  project policy rather than a per-row judgment), and tool calls (see below).
+  It then **names the dimensions it refused to guess at**, because `safety`,
+  `task_completion` and `action_correctness` encode intent and no trace contains
+  intent. Reported coverage is reconciled against the scorecard afterwards, so a
+  judged dimension that was skipped is never reported as scored.
+- **`assevra probe --out probes.jsonl`** — a generated adversarial suite that
+  carries its own answer key. An **injection** probe plants an instruction telling
+  the agent to emit an improbable token, and the token *is* the label; **PII bait**
+  plants a synthetic secret the task never needs; **over-refusal** probes are
+  unambiguously benign, so `should_refuse` is false by construction. Canaries are
+  seeded from the probe id, so a regenerated suite is byte-identical and diffable.
+- **`assevra capture -- python my_agent.py`** — the twenty-line script everyone
+  was writing, shipped. The prompt arrives on stdin, the answer on stdout, which
+  anything can satisfy. Two things come free: a measured `latency_ms` on every
+  row, and `--repeat N` to run each input several times under a shared `case_id`,
+  which unlocks pass^k and the flaky-case report. Also a `Recorder` for in-process
+  capture. Assevra still runs only the command you typed.
+- **`assevra suggest` / `assevra confirm`** — a model drafts the answer key for
+  the three dimensions that need judgment; a human accepts or rejects it, which
+  turns two minutes a row into five seconds. **The gate is the feature:** a
+  proposed field is recorded in `_suggested`, and `assevra validate` reports a row
+  whose answer key is entirely machine-proposed as **UNLABELED**, so it can never
+  satisfy `--strict` until a human confirms it. A `must_include` proposal that is
+  absent from the captured output is kept but flagged, because a proposal that
+  silently rewrote the test to match the agent would be the worst available bug.
+- **Tool contracts derived from the agent's own tool spec** (`--tools`). OpenAI
+  functions, Anthropic tools, MCP manifests and plain `{name: JSON Schema}` maps
+  are recognised **by structure, not filename**, and become `allowed_tools` +
+  `tool_schemas`. `forbidden_tools` and `expected_tool_calls` are deliberately not
+  derived: a spec says what the agent *can* do, never what it must not.
+- **[assevra.ai/try](https://assevra.ai/try)** — drop a trace file into the
+  browser and get a scorecard. The real package runs in the tab under
+  WebAssembly, installed from the wheel the site was built from. There is no
+  server to upload to, and the page says so.
+- **`assevra.toolspec`, `assevra.scan`, `assevra.probe`, `assevra.capture`,
+  `assevra.suggest`** are importable modules, not just commands.
+
+### Changed
+
+- **Trace extraction now carries the signals it always had.** `usage`,
+  `cost_usd`, `latency_ms` and `tool_calls` survive `bootstrap` — including OTel
+  span durations and `gen_ai.usage.*` attributes, OpenAI/Anthropic tool-call
+  shapes, and numeric CSV columns. Dropping them, as every earlier version did,
+  forced a human to re-supply data the trace was already holding.
+- **Scorers may declare an `autolabel` hook**, which is what `scan` runs on. A
+  third-party scorer that can be scored from a raw trace gets the same treatment
+  as a built-in.
+- `assevra capture` strips the shell's `--` separator before running your command.
+- The Pages workflow builds the wheel and re-syncs the published schemas, so
+  `/try` and `/schema/v1/` always match the commit that deployed them.
+
+### Notes on comparability
+
+No scorer, rubric, threshold or detector changed: an existing dataset scores
+exactly as it did under 0.4, and `tests/snapshots/golden.json` pins that.
+`ASSEVRA_VERSION` moves to `0.5` because auto-labeled rows are a new provenance
+that a reader of a scorecard should be able to distinguish — scanned rows are
+tagged `scan` and `auto-labeled`, and generated probes are tagged `probe` and
+`synthetic`.
+
 ## [0.4.0] — 2026-07-31
 
 The adoption release. 0.1–0.3 were about making the *measurement* honest; 0.4 is

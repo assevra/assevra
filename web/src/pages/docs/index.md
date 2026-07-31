@@ -14,11 +14,15 @@ security reviewer, and can still verify a year from now.
 
 ```bash
 pip install assevra
-assevra demo
+assevra demo                        # a full worked scorecard, offline
+assevra scan --from traces.jsonl    # score YOUR traces — nothing labeled
 ```
 
-That writes a complete worked scorecard — no clone, no API key, no network. Open
-`assevra-demo/scorecard.html` and you have seen the whole product.
+`demo` writes a complete worked scorecard — no clone, no API key, no network.
+Open `assevra-demo/scorecard.html` and you have seen the whole product. `scan`
+then does the same for traces you already have: five dimensions, no answer key.
+See [zero-label scoring](/docs/zero-label), or
+[try it in your browser](/try) with no install at all.
 
 Then point it at your own system:
 
@@ -32,6 +36,8 @@ assevra run --gate                 # score, gate the build, write the artifacts
 
 | If you want to…                                  | Go to                                    |
 | ------------------------------------------------ | ---------------------------------------- |
+| Score real traces without labeling anything      | [Zero-label scoring](/docs/zero-label)   |
+| Try it with no install at all                    | [In your browser](/try)                  |
 | Get a scorecard for your own agent               | [Getting started](/docs/getting-started) |
 | Understand what a "dimension" or "skipped" means | [Concepts](/docs/concepts)               |
 | Know exactly what each dimension checks          | [Dimensions](/docs/dimensions)           |

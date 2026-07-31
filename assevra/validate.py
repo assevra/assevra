@@ -304,6 +304,26 @@ def validate_row(
         labeled = any(_non_empty(row.get(k)) for k in spec.answer_key)
 
     if labeled:
+        # A label a model proposed is not a label. `assevra suggest` marks the
+        # fields it drafted, and until a human clears that mark with
+        # `assevra confirm` the row counts as UNLABELED — because a scorecard
+        # built on labels another model invented has the shape of evidence and
+        # none of the substance.
+        from . import suggest as suggest_mod
+
+        if suggest_mod.is_unconfirmed(row):
+            messages.append(
+                Message(
+                    "warning",
+                    "unconfirmed_labels",
+                    "the answer key on this row was proposed by a model and not yet "
+                    "confirmed by a human",
+                    suggest_mod.SUGGESTED_KEY,
+                    "review it with `assevra confirm` — accepting takes seconds, and "
+                    "an unconfirmed label is not evidence",
+                )
+            )
+            return RowReport(lineno, row_id, dimension, UNLABELED, messages)
         return RowReport(lineno, row_id, dimension, LABELED, messages)
 
     messages.append(

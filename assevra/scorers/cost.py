@@ -46,6 +46,18 @@ LABEL_HINT = (
 )
 
 
+# Zero-label: a budget is a project-wide policy line, not a per-row judgment, so
+# a trace carrying usage or a cost figure is scorable the moment `budgets.cost_usd`
+# exists in the config.
+AUTOLABEL_NOTE = "scored against budgets.cost_usd; no per-row labeling needed"
+
+
+def autolabel(interaction: dict, options: Optional[dict] = None):
+    if resolve_budget(interaction, options) is None:
+        return None
+    return {} if measured_cost(interaction, options)[0] is not None else None
+
+
 def _price_table(options: Optional[dict]) -> dict:
     budgets = (options or {}).get("budgets", {}) or {}
     return budgets.get("price", {}) or {}

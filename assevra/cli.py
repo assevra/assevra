@@ -1,13 +1,17 @@
 """
 The Assevra command line.
 
-Twelve commands, one arc: get a dataset, prove it is worth scoring, score it,
-prove the judge, seal the result, map it for a reviewer, and gate the build.
+One arc: get a dataset, prove it is worth scoring, score it, prove the judge,
+seal the result, map it for a reviewer, and gate the build.
 
     assevra demo                     a full worked scorecard, no clone, no key
+    assevra scan --from traces.jsonl score raw traces — nothing labeled
+    assevra probe --out probes.jsonl a self-labeling adversarial suite
+    assevra capture -- python app.py  run your agent and record what it did
     assevra init --from traces.jsonl detect, then generate config + dataset + CI
     assevra integrate langgraph      how to feed Assevra from the tool you use
     assevra bootstrap --from ...     draft a dataset from captured traces
+    assevra suggest / confirm        a model proposes labels; a human accepts them
     assevra validate                 LABELED / UNLABELED / INVALID, before scoring
     assevra run                      score, gate, and write the artifacts
     assevra calibrate                judge-vs-human agreement (Cohen's κ)
@@ -15,6 +19,9 @@ prove the judge, seal the result, map it for a reviewer, and gate the build.
     assevra attest                   map evidence to governance frameworks
     assevra history                  the reliability trend across runs
     assevra schema                   the published artifact contracts
+
+The fastest useful path is `scan` then `probe`: between them they cover six of
+the nine dimensions with no answer key written by hand.
 
 Almost every flag has a ``.assevra.yml`` equivalent, and the precedence is the
 one you would guess: **defaults < config file < environment < flags.** A team
@@ -444,6 +451,250 @@ def cmd_schema(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# scan / probe / capture / suggest / confirm                                   #
+# --------------------------------------------------------------------------- #
+def cmd_scan(args: argparse.Namespace) -> int:
+    from . import scan as scan_mod
+    from . import toolspec
+
+    cfg = _load_config(args)
+    if not Path(args.source).is_file():
+        _die(f"traces not found: {args.source}")
+    try:
+        result = scan_mod.scan(
+            args.source,
+            fmt=args.format,
+            config=cfg,
+            tools=args.tools,
+            limit=args.limit,
+            judge_provider=args.judge_provider,
+            judge_model=args.judge_model,
+            root=args.root,
+        )
+    except bootstrap_mod.BootstrapError as exc:
+        _die(f"scan: {exc}")
+    except toolspec.ToolSpecError as exc:
+        _die(str(exc))
+    except providers.ProviderError as exc:
+        _die(str(exc))
+
+    if result.scorecard is not None and not args.quiet:
+        print(result.scorecard.render_markdown())
+    print(scan_mod.render(result))
+
+    if result.scorecard is not None and args.out_dir:
+        written = api.write_reports(result.scorecard, args.out_dir, args.format_out or ["md", "json", "html"])
+        print()
+        for path in written:
+            print(f"[assevra] wrote {path}")
+
+    if result.scorecard is None:
+        return EXIT_USAGE
+    if args.gate and not result.scorecard.overall_pass:
+        return EXIT_GATE_FAILED
+    return EXIT_OK
+
+
+def cmd_probe(args: argparse.Namespace) -> int:
+    from . import probe as probe_mod
+
+    try:
+        rows = probe_mod.generate(
+            families=args.family,
+            count=args.count,
+            domain=args.domain or "",
+            id_prefix=args.id_prefix,
+        )
+    except ValueError as exc:
+        _die(str(exc))
+
+    api.write_dataset(rows, args.out)
+    print(probe_mod.render_next_steps(rows, args.out))
+    return EXIT_OK
+
+
+def cmd_capture(args: argparse.Namespace) -> int:
+    from . import capture as capture_mod
+    from . import probe as probe_mod
+
+    # argparse.REMAINDER hands back the `--` separator itself; the shell means it
+    # as "flags end here", not as the program to run.
+    command = list(args.command)
+    while command and command[0] == "--":
+        command.pop(0)
+    args.command = command
+
+    if not command:
+        _die(
+            "no agent command given. Put it after `--`, e.g.\n"
+            "  assevra capture --inputs questions.txt --out traces.jsonl -- python agent.py"
+        )
+    if bool(args.source) == bool(args.inputs):
+        _die("pass exactly one of --from <probes.jsonl> or --inputs <file>")
+
+    def progress(done: int, total: int, row_id: str) -> None:
+        if not args.quiet:
+            print(f"[assevra] {done}/{total}  {row_id}", flush=True)
+
+    try:
+        if args.source:
+            rows = api.load_dataset(args.source)
+            pending, total = probe_mod.answered(rows)
+            print(
+                f"[assevra] running your agent over {total} probe(s) from {args.source}"
+                + (f" ({pending} already answered — they will be re-run)" if pending else "")
+            )
+            count, failures = capture_mod.answer_probes(
+                args.command, rows, args.out, timeout=args.timeout, on_progress=progress
+            )
+            print(f"[assevra] wrote {count} answered row(s) -> {args.out}")
+            if failures:
+                print(f"[assevra] {len(failures)} probe(s) errored and are recorded as unanswered:")
+                for failure in failures[:5]:
+                    print(f"[assevra]   {failure}")
+                print(
+                    "[assevra] they are kept, not dropped — a suite that silently shrinks "
+                    "inflates the score of the runs that did complete."
+                )
+            print(f"[assevra] next: assevra validate {args.out} && assevra run --dataset {args.out} --gate")
+        else:
+            pairs = capture_mod.read_inputs(args.inputs)
+            print(
+                f"[assevra] running your agent over {len(pairs)} input(s)"
+                + (f", {args.repeat} trials each" if args.repeat > 1 else "")
+            )
+            count = capture_mod.capture_inputs(
+                args.command,
+                pairs,
+                args.out,
+                repeat=args.repeat,
+                timeout=args.timeout,
+                id_prefix=args.id_prefix,
+                on_progress=progress,
+            )
+            print(f"[assevra] captured {count} interaction(s) -> {args.out}")
+            if args.repeat > 1:
+                print(
+                    "[assevra] trials share a case_id, so pass^k and the flaky-case "
+                    "report are available."
+                )
+            print(f"[assevra] next: assevra scan --from {args.out}   # score it with no labeling")
+    except capture_mod.CaptureError as exc:
+        _die(str(exc))
+    return EXIT_OK
+
+
+def cmd_suggest(args: argparse.Namespace) -> int:
+    from . import suggest as suggest_mod
+
+    cfg = _load_config(args)
+    dataset = _resolve_dataset(args, cfg)
+    rows = api.load_dataset(dataset)
+
+    try:
+        judge = build_judge(
+            provider=args.judge_provider or cfg.get("judge.provider", "auto"),
+            model=args.judge_model or cfg.get("judge.model", ""),
+        )
+    except providers.ProviderError as exc:
+        _die(str(exc))
+    if judge is None:
+        _die(
+            "suggesting labels needs a model. Configure judge.provider in "
+            ".assevra.yml, or use --judge-provider mock to see the mechanics offline."
+        )
+
+    def progress(index: int, total: int, suggestion) -> None:
+        if args.quiet:
+            return
+        if suggestion.error:
+            print(f"[assevra] {index}/{total}  {suggestion.row_id}: unusable output ({suggestion.error})")
+        else:
+            print(f"[assevra] {index}/{total}  {suggestion.row_id}: proposed {', '.join(suggestion.fields)}")
+
+    updated, made = suggest_mod.suggest_rows(rows, judge, on_progress=progress)
+    out = args.out or dataset
+    api.write_dataset(updated, out)
+
+    print()
+    print(f"[assevra] proposed an answer key for {len(made)} of {len(rows)} row(s) -> {out}")
+    print(f"[assevra] judge: {judge.model}")
+    print()
+    print("[assevra] these are PROPOSALS, not labels. `assevra validate` reports them")
+    print("[assevra] as UNLABELED, and --strict fails on them, until a human confirms:")
+    print()
+    print(f"[assevra]   assevra confirm --dataset {out}")
+    print()
+    print("[assevra] that gate is the point. An agent graded against labels another")
+    print("[assevra] model invented produces a number that looks like evidence and is not.")
+    return EXIT_OK
+
+
+def cmd_confirm(args: argparse.Namespace) -> int:
+    from . import suggest as suggest_mod
+
+    cfg = _load_config(args)
+    dataset = _resolve_dataset(args, cfg)
+    rows = api.load_dataset(dataset)
+    waiting = suggest_mod.pending(rows)
+
+    if not waiting:
+        print(f"[assevra] nothing to confirm in {dataset} — no unconfirmed proposals.")
+        return EXIT_OK
+
+    if args.accept_all:
+        print(
+            f"[assevra] WARNING: accepting all {len(waiting)} proposal(s) unreviewed.\n"
+            "[assevra] Every one of these labels was written by a model. Confirming them\n"
+            "[assevra] without reading them means the scorecard measures whether one model\n"
+            "[assevra] agrees with another — which is not what anyone will think it means."
+        )
+        updated = [suggest_mod.confirm_row(r) if suggest_mod.is_unconfirmed(r) else r for r in rows]
+        api.write_dataset(updated, args.out or dataset)
+        print(f"[assevra] confirmed {len(waiting)} row(s) -> {args.out or dataset}")
+        return EXIT_OK
+
+    print(f"[assevra] {len(waiting)} row(s) awaiting review in {dataset}.")
+    print("[assevra] y = accept · n = reject (back to unlabeled) · s = skip · q = save and quit")
+    print()
+
+    decisions: dict[str, str] = {}
+    for index, row in enumerate(waiting, start=1):
+        print(f"── {index}/{len(waiting)} " + "─" * 46)
+        print(suggest_mod.render_row_for_review(row))
+        try:
+            answer = input("\n  accept? [y/n/s/q] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print("\n[assevra] stopping; saving decisions made so far.")
+            break
+        if answer.startswith("q"):
+            break
+        decisions[row["id"]] = answer[:1] if answer else "s"
+        print()
+
+    updated = []
+    accepted = rejected = 0
+    for row in rows:
+        choice = decisions.get(row.get("id", ""))
+        if choice == "y":
+            updated.append(suggest_mod.confirm_row(row))
+            accepted += 1
+        elif choice == "n":
+            updated.append(suggest_mod.reject_row(row))
+            rejected += 1
+        else:
+            updated.append(row)
+    api.write_dataset(updated, args.out or dataset)
+
+    still = len(suggest_mod.pending(updated))
+    print(f"[assevra] accepted {accepted}, rejected {rejected}, {still} still unconfirmed.")
+    print(f"[assevra] wrote {args.out or dataset}")
+    if still:
+        print("[assevra] the unconfirmed rows remain UNLABELED and will fail --strict.")
+    return EXIT_OK
+
+
+# --------------------------------------------------------------------------- #
 # bootstrap / keygen / sign / verify / history / attest / calibrate            #
 # --------------------------------------------------------------------------- #
 def cmd_bootstrap(args: argparse.Namespace) -> int:
@@ -814,6 +1065,97 @@ def build_parser() -> argparse.ArgumentParser:
     schema.add_argument("--list", action="store_true", help="list the schemas and their URLs")
     schema.add_argument("--out-dir", default=None, help="write every schema into a directory")
     schema.set_defaults(func=cmd_schema)
+
+    # -- scan ---------------------------------------------------------------- #
+    scan_p = sub.add_parser(
+        "scan", help="score raw traces on every dimension that needs no labeling"
+    )
+    _add_config_flag(scan_p)
+    scan_p.add_argument("--from", dest="source", required=True, help="captured traces")
+    scan_p.add_argument(
+        "--format", choices=["auto", "generic", "csv", "openai", "anthropic", "otel"],
+        default="auto", help="trace format (default: auto-detect)",
+    )
+    scan_p.add_argument(
+        "--tools", default=None, metavar="PATH",
+        help="the agent's own tool spec (OpenAI/Anthropic/MCP/JSON-Schema map); "
+             "makes the tool_call dimension zero-label",
+    )
+    scan_p.add_argument("--root", default=".", help="where to look for a tool spec (default: .)")
+    scan_p.add_argument("--limit", type=int, default=None, help="cap the traces read")
+    scan_p.add_argument("--out-dir", default=None, help="also write the scorecard here")
+    scan_p.add_argument(
+        "--format-out", action="append", choices=["md", "markdown", "json", "html"],
+        default=None, help="report format for --out-dir; repeatable",
+    )
+    scan_p.add_argument(
+        "--judge-provider", default=None,
+        choices=sorted(providers.PROVIDERS) + ["auto", "none"],
+        help="unlocks the grounding dimension, which is judged",
+    )
+    scan_p.add_argument("--judge-model", default=None)
+    scan_p.add_argument("--gate", action="store_true", help="exit non-zero if the scan fails")
+    scan_p.add_argument("--quiet", action="store_true", help="skip the full report")
+    scan_p.set_defaults(func=cmd_scan)
+
+    # -- probe --------------------------------------------------------------- #
+    probe_p = sub.add_parser(
+        "probe", help="generate a self-labeling adversarial suite (injection, PII bait, over-refusal)"
+    )
+    probe_p.add_argument("--out", default="probes.jsonl", help="where to write the probes")
+    probe_p.add_argument(
+        "--family", action="append", default=None,
+        help="probe family: injection, pii-bait, over-refusal; repeatable (default: all)",
+    )
+    probe_p.add_argument("--count", type=int, default=6, help="probes per family (default: 6)")
+    probe_p.add_argument(
+        "--domain", default=None,
+        help="one line describing your agent, woven into each probe's context",
+    )
+    probe_p.add_argument("--id-prefix", default="probe", help="id prefix for generated rows")
+    probe_p.set_defaults(func=cmd_probe)
+
+    # -- capture ------------------------------------------------------------- #
+    cap = sub.add_parser(
+        "capture", help="run your agent and record what it produced (times every call)"
+    )
+    cap.add_argument("--from", dest="source", default=None, metavar="PROBES", help="answer a probe suite")
+    cap.add_argument("--inputs", default=None, metavar="FILE", help="one input per line, or JSONL")
+    cap.add_argument("--out", required=True, help="where to write the captured rows")
+    cap.add_argument(
+        "--repeat", type=int, default=1,
+        help="trials per input, grouped under a shared case_id (unlocks pass^k)",
+    )
+    cap.add_argument("--timeout", type=float, default=120.0, help="seconds per call")
+    cap.add_argument("--id-prefix", default="capture", help="id prefix for captured rows")
+    cap.add_argument("--quiet", action="store_true", help="no per-row progress")
+    cap.add_argument(
+        "command", nargs=argparse.REMAINDER,
+        help="-- your agent command; it reads the prompt on stdin and answers on stdout",
+    )
+    cap.set_defaults(func=cmd_capture)
+
+    # -- suggest / confirm --------------------------------------------------- #
+    sug = sub.add_parser(
+        "suggest", help="have a model propose the answer key (you confirm it before it counts)"
+    )
+    _add_config_flag(sug)
+    sug.add_argument("--dataset", default=None, help="dataset to propose labels for")
+    sug.add_argument("--out", default=None, help="write here instead of in place")
+    sug.add_argument("--judge-provider", default=None, choices=sorted(providers.PROVIDERS) + ["auto"])
+    sug.add_argument("--judge-model", default=None)
+    sug.add_argument("--quiet", action="store_true")
+    sug.set_defaults(func=cmd_suggest)
+
+    conf = sub.add_parser("confirm", help="review proposed labels; only confirmation makes them count")
+    _add_config_flag(conf)
+    conf.add_argument("--dataset", default=None, help="dataset holding proposals")
+    conf.add_argument("--out", default=None, help="write here instead of in place")
+    conf.add_argument(
+        "--accept-all", action="store_true",
+        help="accept every proposal unreviewed (loudly warned; rarely what you want)",
+    )
+    conf.set_defaults(func=cmd_confirm)
 
     # -- bootstrap ----------------------------------------------------------- #
     boot = sub.add_parser("bootstrap", help="draft a dataset from captured traces")

@@ -199,6 +199,121 @@ def _first_alias(rec: dict, aliases: Iterable[str]) -> Optional[str]:
     return None
 
 
+# Signals a trace often already carries that need NO human labeling to become a
+# scorable row: token usage and cost price the `cost` dimension, a duration feeds
+# `latency`, and the calls the agent made feed `tool_call` and
+# `action_correctness`. Dropping them on extraction — as every version before
+# 0.5 did — forced a human to re-supply data the trace was already holding.
+_USAGE_ALIASES = ("usage", "token_usage", "tokens")
+_LATENCY_ALIASES = ("latency_ms", "duration_ms", "elapsed_ms", "latency_s", "duration")
+_COST_ALIASES = ("cost_usd", "cost", "total_cost")
+_TOOLCALL_ALIASES = ("tool_calls", "toolCalls", "tools_called", "function_calls")
+
+# OTel/OpenInference/OpenLLMetry attribute names for the same signals.
+_SPAN_USAGE = {
+    "input_tokens": (
+        "gen_ai.usage.input_tokens", "gen_ai.usage.prompt_tokens",
+        "llm.token_count.prompt", "llm.usage.prompt_tokens",
+    ),
+    "output_tokens": (
+        "gen_ai.usage.output_tokens", "gen_ai.usage.completion_tokens",
+        "llm.token_count.completion", "llm.usage.completion_tokens",
+    ),
+}
+
+
+def _as_number(value) -> Optional[float]:
+    """A number, tolerating the strings a CSV column inevitably contains."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip().lstrip("$"))
+        except ValueError:
+            return None
+    return None
+
+
+def _normalize_usage(value) -> Optional[dict]:
+    """Coerce a provider's usage object into {input_tokens, output_tokens}."""
+    if not isinstance(value, dict):
+        return None
+    aliases = {
+        "input_tokens": ("input_tokens", "prompt_tokens", "promptTokens", "inputTokens"),
+        "output_tokens": ("output_tokens", "completion_tokens", "completionTokens", "outputTokens"),
+    }
+    out = {}
+    for target, names in aliases.items():
+        for name in names:
+            number = _as_number(value.get(name))
+            if number is not None:
+                out[target] = int(number)
+                break
+    return out or None
+
+
+def _carry_signals(rec: dict, into: dict) -> dict:
+    """Copy the already-captured, zero-label signals onto an interaction."""
+    if not isinstance(rec, dict):
+        return into
+
+    usage = _normalize_usage(_first_present(rec, _USAGE_ALIASES))
+    if usage:
+        into["usage"] = usage
+
+    cost = _as_number(_first_present(rec, _COST_ALIASES))
+    if cost is not None:
+        into["cost_usd"] = cost
+
+    for key in _LATENCY_ALIASES:
+        value = _as_number(rec.get(key))
+        if value is not None:
+            # `latency_s`/`duration` are seconds by convention; the rest are ms.
+            into["latency_ms"] = value * (1000.0 if key in ("latency_s", "duration") else 1.0)
+            break
+
+    calls = _first_present(rec, _TOOLCALL_ALIASES)
+    normalized = _normalize_tool_calls(calls)
+    if normalized:
+        into["tool_calls"] = normalized
+
+    for key in ("case_id", "id"):
+        if isinstance(rec.get(key), str) and key == "case_id":
+            into["case_id"] = rec[key]
+    if isinstance(rec.get("tags"), list):
+        into["tags"] = [str(t) for t in rec["tags"]]
+    return into
+
+
+def _first_present(rec: dict, keys: Iterable[str]):
+    for key in keys:
+        if rec.get(key) not in (None, "", [], {}):
+            return rec[key]
+    return None
+
+
+def _normalize_tool_calls(calls) -> list:
+    """Accept the OpenAI, Anthropic and plain shapes; emit {name, arguments}."""
+    if isinstance(calls, dict):
+        calls = [calls]
+    if not isinstance(calls, list):
+        return []
+    out = []
+    for call in calls:
+        if not isinstance(call, dict):
+            continue
+        name = call.get("name") or call.get("tool") or call.get("function")
+        arguments = call.get("arguments", call.get("args", call.get("input")))
+        if isinstance(name, dict):  # OpenAI: {"function": {"name", "arguments"}}
+            arguments = name.get("arguments", arguments)
+            name = name.get("name")
+        if name:
+            out.append({"name": str(name), "arguments": arguments})
+    return out
+
+
 def _extract_generic(
     rec: dict,
     input_field: Optional[str],
@@ -210,11 +325,14 @@ def _extract_generic(
     ctx = rec.get(context_field) if context_field else _first_alias(rec, _CONTEXT_ALIASES)
     if not inp and not out:
         return None
-    return {
-        "input": _as_text(inp),
-        "agent_output": _as_text(out),
-        "context": _as_text(ctx),
-    }
+    return _carry_signals(
+        rec,
+        {
+            "input": _as_text(inp),
+            "agent_output": _as_text(out),
+            "context": _as_text(ctx),
+        },
+    )
 
 
 def _messages_content(messages: list, role: str) -> Optional[str]:
@@ -251,7 +369,23 @@ def _extract_openai(rec: dict) -> Optional[dict]:
 
     if not inp and not out:
         return None
-    return {"input": _as_text(inp), "agent_output": _as_text(out), "context": _as_text(ctx)}
+    interaction = {
+        "input": _as_text(inp),
+        "agent_output": _as_text(out),
+        "context": _as_text(ctx),
+    }
+    # Usage lives on the response for OpenAI; tool calls live on the message.
+    _carry_signals(rec, interaction)
+    if isinstance(response, dict):
+        _carry_signals(response, interaction)
+    choices = response.get("choices") if isinstance(response, dict) else None
+    if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+        message = choices[0].get("message")
+        if isinstance(message, dict):
+            calls = _normalize_tool_calls(message.get("tool_calls"))
+            if calls:
+                interaction["tool_calls"] = calls
+    return interaction
 
 
 def _extract_anthropic(rec: dict) -> Optional[dict]:
@@ -265,7 +399,25 @@ def _extract_anthropic(rec: dict) -> Optional[dict]:
         ctx = rec["system"]
     if not inp and not out:
         return None
-    return {"input": _as_text(inp), "agent_output": _as_text(out), "context": _as_text(ctx)}
+    interaction = _carry_signals(
+        rec,
+        {"input": _as_text(inp), "agent_output": _as_text(out), "context": _as_text(ctx)},
+    )
+    # Anthropic returns tool_use blocks inside the assistant message content.
+    for msg in messages:
+        if not isinstance(msg, dict) or msg.get("role") != "assistant":
+            continue
+        blocks = msg.get("content")
+        if not isinstance(blocks, list):
+            continue
+        calls = [
+            {"name": b.get("name"), "arguments": b.get("input")}
+            for b in blocks
+            if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name")
+        ]
+        if calls:
+            interaction["tool_calls"] = calls
+    return interaction
 
 
 def _iter_spans(records: list[Any]) -> Iterable[dict]:
@@ -334,7 +486,31 @@ def _extract_otel(span: dict) -> Optional[dict]:
         out = "\n".join(_as_text(c) for c in comps if c) or attrs.get("gen_ai.completion")
     if not inp and not out:
         return None
-    return {"input": _as_text(inp), "agent_output": _as_text(out), "context": ""}
+    interaction = {"input": _as_text(inp), "agent_output": _as_text(out), "context": ""}
+
+    # Spans carry usage and duration as attributes rather than as fields.
+    usage = {}
+    for target, names in _SPAN_USAGE.items():
+        for name in names:
+            value = attrs.get(name)
+            if isinstance(value, (int, float)):
+                usage[target] = int(value)
+                break
+            if isinstance(value, str) and value.isdigit():
+                usage[target] = int(value)
+                break
+    if usage:
+        interaction["usage"] = usage
+
+    # OTLP timestamps are unix nanoseconds; a span's duration is the latency.
+    start, end = span.get("startTimeUnixNano"), span.get("endTimeUnixNano")
+    try:
+        if start is not None and end is not None:
+            interaction["latency_ms"] = (int(end) - int(start)) / 1e6
+    except (TypeError, ValueError):
+        pass
+    _carry_signals(attrs, interaction)
+    return interaction
 
 
 def _as_text(value: Any) -> str:
@@ -367,10 +543,17 @@ def _draft_row(interaction: dict, dimension: str, index: int, id_prefix: str) ->
         "context": interaction.get("context", ""),
         "agent_output": interaction.get("agent_output", ""),
     }
+    # Signals the trace already carried travel with the row: they cost the human
+    # nothing and they are what lets `assevra scan` score cost, latency and
+    # tool calls without a single label being written.
+    for key in ("usage", "cost_usd", "latency_ms", "tool_calls", "case_id"):
+        if key in interaction:
+            row[key] = interaction[key]
+
     if template["field"] is not None:
         # Fresh mutable default per row.
         row[template["field"]] = [] if template["value"] == [] else template["value"]
-    row["tags"] = ["bootstrap", "needs-review"]
+    row["tags"] = list(interaction.get("tags", [])) + ["bootstrap", "needs-review"]
     row["_review"] = template["hint"]
     return row
 

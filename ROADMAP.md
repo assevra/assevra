@@ -48,7 +48,29 @@ getting value from it.
 
 ---
 
-## Next: 0.5 — "easy to trust at scale"
+## Shipped in 0.5 — "nothing to label"
+
+0.4 made the plumbing take five minutes and then asked for an afternoon of
+labeling. 0.5 attacks the afternoon: **six of the nine dimensions never needed a
+human.**
+
+- **`assevra scan`** — a scorecard from raw traces with nothing labeled: PII,
+  grounding, cost, latency, and tool calls. It names the dimensions it refuses to
+  guess at rather than inventing them.
+- **`assevra probe`** — a generated adversarial suite that carries its own answer
+  key: injection canaries, PII bait, over-refusal probes.
+- **`assevra capture`** — one command instead of the capture script everyone
+  writes; times every call, and `--repeat N` unlocks pass^k.
+- **`assevra suggest` / `confirm`** — a model drafts the three judgment
+  dimensions, a human accepts. An unconfirmed proposal counts as UNLABELED.
+- **Tool contracts derived from the agent's own tool spec** — OpenAI, Anthropic,
+  MCP, or a schema map, recognised by structure.
+- **[assevra.ai/try](https://assevra.ai/try)** — drop a trace file in the browser;
+  the real package runs in the tab under WebAssembly, nothing uploaded.
+
+---
+
+## Next: 0.6 — "easy to trust at scale"
 
 Everything here is about the same question: *does this number hold up when the
 dataset gets big and the stakes get real?*
@@ -71,7 +93,7 @@ dataset gets big and the stakes get real?*
 - **Concurrency.** Judged dimensions run serially today; a dataset of thousands
   of rows should not take an afternoon.
 
-## Then: 0.6 — "evidence a reviewer already knows how to read"
+## Then: 0.7 — "evidence a reviewer already knows how to read"
 
 - **Case studies, published.** Three end-to-end walkthroughs live in
   `examples/case-studies/` today; the goal is a maintained set with real failure

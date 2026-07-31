@@ -38,12 +38,17 @@ backend, no login.
 
 ```bash
 pip install assevra
-assevra demo
+assevra demo                              # a full worked scorecard, offline
+assevra scan --from traces.jsonl          # score YOUR traces — nothing labeled
 ```
 
-That writes a complete worked scorecard — HTML report, JSON contract, Agent Card,
-the dataset it scored, and the config that produced it — with **no clone, no API
-key, and no network**.
+`demo` writes a complete worked scorecard — HTML report, JSON contract, Agent
+Card, the dataset it scored, and the config that produced it — with **no clone, no
+API key, and no network**. `scan` then does the same for traces you already have.
+
+**Or score a trace file with no install at all:
+[assevra.ai/try](https://assevra.ai/try)** — the real package, running in your
+browser under WebAssembly. Nothing is uploaded; there is no server to upload to.
 
 This is a personal open-source research project by **Veera Ravindra Divi**: an
 open reference implementation and named methodology for the research and
@@ -54,11 +59,45 @@ measure.
 
 ---
 
-## ⚡ Five minutes, start to finish
+## ⚡ Five minutes to a real gate — with nothing hand-labeled
+
+Installing takes two minutes; writing an answer key used to take an afternoon.
+So Assevra attacks the afternoon, on one observation: **six of the nine
+dimensions never needed a human.**
 
 ```bash
-pip install assevra                     # zero-dependency core
-assevra demo                            # a full worked scorecard, offline
+pip install assevra
+
+# 1. Score traces you already have. No config, no labels, no key.
+assevra scan --from traces.jsonl --tools tools.json
+
+# 2. Cover the adversarial dimensions with a suite that labels itself.
+assevra probe --out probes.jsonl
+assevra capture --from probes.jsonl --out answered.jsonl -- python my_agent.py
+assevra run --dataset answered.jsonl --gate
+```
+
+| Dimension | What it actually needs | Human labeling |
+|---|---|---|
+| `pii` | an output to scan — the detector defines the failure | **none** |
+| `grounding` | the retrieved context, already in the trace | **none** |
+| `cost` · `latency` | a budget — one line of project policy | **none** |
+| `tool_call` | the agent's **own tool spec**, already machine-readable | **none** |
+| `injection` | a planted canary — generated, and self-labeling | **none** |
+| `safety` · `task_completion` · `action_correctness` | intent: what *should* have happened | judgment |
+
+For the last three, `assevra suggest` has a model draft the answer key and
+`assevra confirm` has you accept it — five seconds a row instead of two minutes.
+**A proposal is not a label:** the validator reports an unconfirmed row as
+UNLABELED and `--strict` fails on it, because an agent graded against labels
+another model invented produces a number with the shape of evidence and none of
+the substance.
+
+[Zero-label scoring →](https://assevra.ai/docs/zero-label)
+
+### The thorough path
+
+```bash
 assevra init --from traces.jsonl        # detect traces, framework, providers → scaffold everything
 assevra validate --strict               # is every row actually labeled?
 assevra run --gate                      # score, gate the build, write the artifact
@@ -222,6 +261,7 @@ competing with them.
 
 ```bash
 assevra integrate langgraph          # the wiring for the tool you use
+assevra scan --from traces.jsonl     # score them immediately, unlabeled
 assevra bootstrap --from traces.jsonl --out evals/agent.jsonl
 ```
 
@@ -423,13 +463,13 @@ thought of.
 
 ## 📚 How to cite
 
-> Divi, Veera Ravindra. *Assevra: A Reliability Scorecard for LLM Agents*, v0.4,
+> Divi, Veera Ravindra. *Assevra: A Reliability Scorecard for LLM Agents*, v0.5,
 > 2026. https://doi.org/10.5281/zenodo.21200852
 
 Archived on Zenodo with a citable DOI:
 **[10.5281/zenodo.21200852](https://doi.org/10.5281/zenodo.21200852)** (the concept
 DOI — always resolves to the latest version). A [`CITATION.cff`](CITATION.cff) is
-included. When you report a number, say it was *measured with Assevra v0.4* — the
+included. When you report a number, say it was *measured with Assevra v0.5* — the
 version is part of the claim.
 
 ## 📄 License

@@ -7,6 +7,10 @@ eyebrow: Using it
 
 ```
 assevra demo                     a full worked scorecard, no clone, no key
+assevra scan --from traces.jsonl score raw traces — nothing labeled
+assevra probe --out probes.jsonl a self-labeling adversarial suite
+assevra capture -- python app.py run your agent and record what it did
+assevra suggest / confirm        a model proposes labels; a human accepts them
 assevra init --from traces.jsonl detect, then generate config + dataset + CI
 assevra integrate langgraph      how to feed Assevra from the tool you use
 assevra bootstrap --from ...     draft a dataset from captured traces
@@ -102,6 +106,86 @@ assevra demo --out-dir /tmp/demo --provider mock   # exercise the judged path of
 
 Writes the HTML report, the JSON scorecard, the Markdown summary, the Agent Card,
 the dataset it scored, and the `.assevra.yml` that produced all of it.
+
+## assevra scan
+
+Score raw traces on every dimension that needs no labeling. See
+[Zero-label scoring](/docs/zero-label).
+
+```bash
+assevra scan --from traces.jsonl
+assevra scan --from spans.json --tools tools.json --out-dir .assevra/scan
+```
+
+| Flag               | Meaning                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| `--from PATH`      | Captured traces, in any format `bootstrap` reads.                                           |
+| `--tools PATH`     | The agent's own tool spec (OpenAI/Anthropic/MCP/schema map) — makes `tool_call` zero-label. |
+| `--root DIR`       | Where to look for a tool spec when `--tools` is omitted.                                    |
+| `--limit N`        | Cap the traces read.                                                                        |
+| `--out-dir DIR`    | Also write the scorecard.                                                                   |
+| `--judge-provider` | Unlocks `grounding`, which is judged.                                                       |
+| `--gate`           | Exit non-zero if the scan fails.                                                            |
+
+It reports what it scored, what it could not, and — for the dimensions that
+encode intent — that it will not guess.
+
+## assevra probe
+
+Generate a self-labeling adversarial suite.
+
+```bash
+assevra probe --out probes.jsonl
+assevra probe --out probes.jsonl --family injection --count 12 \
+              --domain "You are a claims assistant for a health insurer."
+```
+
+| Flag            | Meaning                                                  |
+| --------------- | -------------------------------------------------------- |
+| `--out PATH`    | Where to write the probes.                               |
+| `--family NAME` | `injection`, `pii-bait`, `over-refusal`; repeatable.     |
+| `--count N`     | Probes per family (default: 6).                          |
+| `--domain TEXT` | One line describing your agent, woven into each context. |
+
+Canaries are seeded from the probe id, so a regenerated suite is byte-identical.
+
+## assevra capture
+
+Run your agent and record what it produced. The prompt arrives on **stdin**, the
+answer comes back on **stdout**.
+
+```bash
+assevra capture --from probes.jsonl --out answered.jsonl -- python agent.py
+assevra capture --inputs questions.txt --out traces.jsonl --repeat 3 -- python agent.py
+```
+
+| Flag            | Meaning                                                     |
+| --------------- | ----------------------------------------------------------- |
+| `--from PROBES` | Answer a probe suite, preserving its answer key.            |
+| `--inputs FILE` | One input per line, or JSONL with `input`/`context`.        |
+| `--out PATH`    | Where to write the captured rows.                           |
+| `--repeat N`    | Trials per input under a shared `case_id` — unlocks pass^k. |
+| `--timeout S`   | Seconds per call (default: 120).                            |
+
+Every row gets a measured `latency_ms`, so the latency dimension turns on for
+free. Assevra runs only the command you typed, in your shell.
+
+## assevra suggest / confirm
+
+A model drafts the answer key for the three dimensions that encode intent; a
+human accepts it. **An unconfirmed proposal does not count as a label** — the
+validator reports it as UNLABELED and `--strict` fails on it.
+
+```bash
+assevra suggest --dataset drafted.jsonl
+assevra confirm --dataset drafted.jsonl        # y / n / s / q per row
+```
+
+| Flag             | Meaning                                                      |
+| ---------------- | ------------------------------------------------------------ |
+| `--dataset PATH` | The dataset to propose or review labels for.                 |
+| `--out PATH`     | Write elsewhere instead of in place.                         |
+| `--accept-all`   | `confirm` only: accept everything unreviewed. Loudly warned. |
 
 ## assevra init
 

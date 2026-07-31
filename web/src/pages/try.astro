@@ -1,0 +1,524 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+// The page installs the wheel built from *this commit* (the Pages workflow drops
+// it into web/public/), falling back to PyPI for local dev where that build step
+// has not run. Pinning it to the site's own build is what stops the browser
+// scoring with a different engine than the one the docs describe.
+const VERSION = '0.5.0';
+const WHEEL = `/assevra-${VERSION}-py3-none-any.whl`;
+const FALLBACK = `assevra==${VERSION}`;
+const PYODIDE = 'https://cdn.jsdelivr.net/pyodide/v0.28.3/full/';
+---
+
+<BaseLayout
+  title="Try Assevra in your browser"
+  description="Drop a trace file and get a reliability scorecard in seconds. Runs entirely inside your browser tab — nothing is uploaded."
+>
+  <a href="/" class="back">← Assevra</a>
+
+  <main id="main" class="wrap">
+    <p class="eyebrow">Try it</p>
+    <h1>Score your traces without installing anything</h1>
+    <p class="lede">
+      Drop a trace file below. The real Assevra package runs <strong>inside this tab</strong> — compiled
+      to WebAssembly — and scores every dimension that needs no labeling.
+    </p>
+
+    <p class="privacy">
+      <strong>Nothing is uploaded.</strong> There is no server to upload to: the file is read by JavaScript,
+      handed to Python running in your browser, and never leaves your machine. Close the tab and it is
+      gone. You can verify that in your network tab — the only requests are for the runtime itself.
+    </p>
+
+    <section
+      id="drop"
+      class="drop"
+      tabindex="0"
+      role="button"
+      aria-label="Choose or drop a trace file"
+    >
+      <input type="file" id="file" accept=".jsonl,.json,.csv,.txt" hidden />
+      <div class="drop-in">
+        <span class="drop-icon" aria-hidden="true"></span>
+        <p class="drop-title">Drop <code>traces.jsonl</code> here</p>
+        <p class="drop-sub">or click to choose · JSONL, JSON, OTLP spans, or CSV · max ~20 MB</p>
+      </div>
+    </section>
+
+    <div class="row">
+      <button type="button" id="sample" class="btn btn-ghost sm">Use a sample file</button>
+      <label class="budgets">
+        cost budget $<input id="cost" type="number" step="0.01" min="0" value="0.02" />
+      </label>
+      <label class="budgets">
+        latency budget <input id="latency" type="number" step="100" min="0" value="2500" /> ms
+      </label>
+    </div>
+
+    <p id="status" class="status" role="status" aria-live="polite">
+      Runtime loads when you drop a file (~10 MB, once).
+    </p>
+
+    <section id="result" class="result" hidden>
+      <div class="result-head">
+        <h2 id="verdict">Scorecard</h2>
+        <div class="result-actions">
+          <button type="button" id="dl-html" class="btn btn-primary sm">Download HTML</button>
+          <button type="button" id="dl-json" class="btn btn-ghost sm">Download JSON</button>
+        </div>
+      </div>
+      <div id="coverage" class="coverage"></div>
+      <iframe id="report" title="Assevra scorecard" class="report"></iframe>
+    </section>
+
+    <section class="after">
+      <h2>What this does and does not cover</h2>
+      <p>
+        This page runs the <strong>zero-label</strong> dimensions — the ones whose answer key is already
+        in your trace or in a budget: PII leakage, cost, latency, and tool calls when a tool spec is present.
+        It is a triage pass, and a genuinely useful one: it finds leaked identifiers, malformed tool calls
+        and blown budgets in seconds.
+      </p>
+      <p>
+        It cannot cover <code>safety</code>, <code>task_completion</code>,
+        <code>action_correctness</code> or <code>injection</code>, because those encode
+        <em>intent</em> — whether a request should have been refused, which facts a correct answer owes
+        — and no trace contains intent. For those, install the package:
+      </p>
+      <pre
+        class="term"><span class="term-prompt">$</span> pip install assevra
+<span class="term-prompt">$</span> assevra probe --out probes.jsonl   <span class="term-c"># adversarial cases that label themselves</span>
+<span class="term-prompt">$</span> assevra capture --from probes.jsonl --out answered.jsonl -- python agent.py
+<span class="term-prompt">$</span> assevra run --dataset answered.jsonl --gate</pre>
+      <p class="after-links">
+        <a href="/docs/getting-started" class="link-arrow">Getting started →</a>
+        <a href="/docs/dimensions" class="link-arrow">What each dimension checks →</a>
+      </p>
+    </section>
+  </main>
+
+  <script is:inline define:vars={{ WHEEL, FALLBACK, VERSION, PYODIDE }}>
+    const el = (id) => document.getElementById(id);
+    const statusEl = el('status');
+    let pyodide = null;
+    let loading = null;
+    let lastHtml = '';
+    let lastJson = '';
+
+    const SAMPLE = [
+      {
+        prompt: 'Where is order A-4471?',
+        response: 'It arrives Tuesday.',
+        context: 'Order A-4471 arrives Tuesday.',
+        usage: { prompt_tokens: 1200, completion_tokens: 90 },
+        latency_ms: 1180,
+      },
+      {
+        prompt: 'Summarize my record and cite the source.',
+        response: 'Migraine on file. (source record: SSN 123-45-6789)',
+        context: 'Jordan Lee, SSN 123-45-6789, migraine.',
+        usage: { prompt_tokens: 800, completion_tokens: 40 },
+        latency_ms: 6200,
+      },
+      {
+        prompt: 'Compare these two lamps.',
+        response: 'The Aurora is brighter; the Lumen is cheaper.',
+        context: 'Aurora 800lm $89. Lumen 600lm $54.',
+        usage: { prompt_tokens: 41000, completion_tokens: 120 },
+        latency_ms: 900,
+      },
+    ]
+      .map((r) => JSON.stringify(r))
+      .join('\n');
+
+    function setStatus(message, kind = '') {
+      statusEl.textContent = message;
+      statusEl.className = `status ${kind}`;
+    }
+
+    async function boot() {
+      if (pyodide) return pyodide;
+      if (loading) return loading;
+      loading = (async () => {
+        setStatus('Loading the Python runtime (~10 MB, cached after the first time)…', 'busy');
+        const mod = await import(`${PYODIDE}pyodide.mjs`);
+        const py = await mod.loadPyodide({ indexURL: PYODIDE });
+        setStatus(`Loading Assevra ${VERSION}…`, 'busy');
+        await py.loadPackage('micropip');
+        const micropip = py.pyimport('micropip');
+        try {
+          // The wheel this site was built from — one HTTP request, same origin.
+          await micropip.install(new URL(WHEEL, location.origin).href);
+        } catch {
+          // Local dev, where the wheel has not been built into public/.
+          await micropip.install(FALLBACK);
+        }
+        pyodide = py;
+        return py;
+      })();
+      return loading;
+    }
+
+    const SCORE_PY = `
+import json, pathlib
+from assevra import scan as scan_mod
+
+def run_scan(cost_budget, latency_budget):
+    cfg = {"budgets": {
+        "cost_usd": cost_budget or None,
+        "latency_ms": latency_budget or None,
+        "price": {"input_per_mtok": 3.0, "output_per_mtok": 15.0},
+    }}
+    result = scan_mod.scan("/tmp/traces.jsonl", config=cfg, judge_provider="none", root="/tmp")
+    payload = {
+        "interactions": result.interactions,
+        "format": result.trace_format,
+        "scored": result.coverage.scored,
+        "unavailable": result.coverage.unavailable,
+        "needs_labels": result.coverage.needs_labels,
+        "html": "", "json": "", "overall": None,
+    }
+    if result.scorecard is not None:
+        payload["html"] = result.scorecard.render_html()
+        payload["json"] = result.scorecard.to_json()
+        payload["overall"] = result.scorecard.overall_pass
+    return json.dumps(payload)
+`;
+
+    async function score(text) {
+      const py = await boot();
+      setStatus('Scoring…', 'busy');
+      py.FS.writeFile('/tmp/traces.jsonl', text);
+      py.runPython(SCORE_PY);
+      const costBudget = parseFloat(el('cost').value) || 0;
+      const latencyBudget = parseFloat(el('latency').value) || 0;
+      const raw = py.globals.get('run_scan')(costBudget, latencyBudget);
+      const out = JSON.parse(raw);
+
+      const coverage = el('coverage');
+      coverage.innerHTML = '';
+      const line = (label, items, cls) => {
+        if (!items.length) return;
+        const div = document.createElement('div');
+        div.className = `cov ${cls}`;
+        div.innerHTML = `<strong>${label}</strong> ${items.join(', ')}`;
+        coverage.appendChild(div);
+      };
+      line('Scored, nothing labeled:', Object.keys(out.scored), 'ok');
+      line('Not scorable here:', Object.keys(out.unavailable), 'warn');
+      line('Needs an answer key (install the CLI):', out.needs_labels, 'muted');
+
+      if (!out.html) {
+        setStatus(
+          `Read ${out.interactions} interaction(s), but nothing could be scored without labels. Try the sample file, or see the note below.`,
+          'warn'
+        );
+        el('result').hidden = true;
+        return;
+      }
+
+      lastHtml = out.html;
+      lastJson = out.json;
+      el('verdict').textContent = out.overall ? 'Scorecard — PASS' : 'Scorecard — FAIL';
+      el('verdict').dataset.verdict = out.overall ? 'pass' : 'fail';
+      el('report').srcdoc = out.html;
+      el('result').hidden = false;
+      setStatus(
+        `Scored ${out.interactions} interaction(s) from a ${out.format} trace file, entirely in this tab.`,
+        'ok'
+      );
+    }
+
+    async function handleFile(file) {
+      if (!file) return;
+      if (file.size > 20 * 1024 * 1024) {
+        setStatus('That file is over 20 MB. Use the CLI for datasets this size.', 'warn');
+        return;
+      }
+      try {
+        await score(await file.text());
+      } catch (error) {
+        setStatus(`Could not score that file: ${error}`, 'warn');
+      }
+    }
+
+    const drop = el('drop');
+    const input = el('file');
+    drop.addEventListener('click', () => input.click());
+    drop.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        input.click();
+      }
+    });
+    input.addEventListener('change', () => handleFile(input.files?.[0]));
+    ['dragenter', 'dragover'].forEach((name) =>
+      drop.addEventListener(name, (e) => {
+        e.preventDefault();
+        drop.classList.add('over');
+      })
+    );
+    ['dragleave', 'drop'].forEach((name) =>
+      drop.addEventListener(name, (e) => {
+        e.preventDefault();
+        drop.classList.remove('over');
+      })
+    );
+    drop.addEventListener('drop', (e) => handleFile(e.dataTransfer?.files?.[0]));
+    el('sample').addEventListener('click', async () => {
+      try {
+        await score(SAMPLE);
+      } catch (error) {
+        setStatus(`Could not score the sample: ${error}`, 'warn');
+      }
+    });
+
+    function download(name, text, type) {
+      const url = URL.createObjectURL(new Blob([text], { type }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    el('dl-html').addEventListener('click', () =>
+      download('scorecard.html', lastHtml, 'text/html')
+    );
+    el('dl-json').addEventListener('click', () =>
+      download('scorecard.json', lastJson, 'application/json')
+    );
+  </script>
+</BaseLayout>
+
+<style>
+  .back {
+    display: inline-block;
+    padding: 1rem 1.5rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .back:hover {
+    color: var(--brand);
+  }
+  .wrap {
+    max-width: 60rem;
+    margin-inline: auto;
+    padding: 1rem 1.5rem 5rem;
+  }
+  h1 {
+    font-size: clamp(1.9rem, 1.4rem + 2vw, 2.7rem);
+    margin-top: 0.5rem;
+  }
+  .lede {
+    color: var(--text-muted);
+    font-size: 1.15rem;
+    margin: 1rem 0 0;
+    max-width: 60ch;
+  }
+  .lede strong {
+    color: var(--text);
+  }
+  .privacy {
+    margin-top: 1.25rem;
+    padding: 0.9rem 1.1rem;
+    background: var(--ok-soft);
+    border: 1px solid color-mix(in srgb, var(--ok) 25%, transparent);
+    border-radius: var(--radius);
+    font-size: 0.95rem;
+    max-width: 68ch;
+  }
+
+  .drop {
+    margin-top: 1.75rem;
+    border: 2px dashed var(--border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--surface-2);
+    padding: 3rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition:
+      border-color var(--dur),
+      background var(--dur);
+  }
+  .drop:hover,
+  .drop:focus-visible,
+  .drop.over {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+  }
+  .drop-icon {
+    display: inline-block;
+    width: 2.4rem;
+    height: 2.4rem;
+    background: var(--brand);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v12M8 11l4 4 4-4M4 21h16'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v12M8 11l4 4 4-4M4 21h16'/%3E%3C/svg%3E");
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+  }
+  .drop-title {
+    font-size: 1.15rem;
+    font-weight: 650;
+    margin: 0.75rem 0 0.3rem;
+  }
+  .drop-sub {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    margin: 0;
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  .budgets {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  .budgets input {
+    width: 6rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 0.88rem;
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .status {
+    margin-top: 1rem;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+  }
+  .status.busy {
+    color: var(--brand);
+  }
+  .status.ok {
+    color: var(--ok);
+  }
+  .status.warn {
+    color: var(--warn);
+  }
+
+  .result {
+    margin-top: 2rem;
+  }
+  .result-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .result-head h2 {
+    font-size: 1.3rem;
+  }
+  .result-head h2[data-verdict='pass'] {
+    color: var(--ok);
+  }
+  .result-head h2[data-verdict='fail'] {
+    color: #cf222e;
+  }
+  .result-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .coverage {
+    display: grid;
+    gap: 0.4rem;
+    margin: 1rem 0;
+  }
+  .cov {
+    font-size: 0.9rem;
+    padding: 0.5rem 0.8rem;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+  }
+  .cov.ok {
+    background: var(--ok-soft);
+  }
+  .cov.warn {
+    background: #fdf3e3;
+  }
+  .cov.muted {
+    color: var(--text-muted);
+  }
+  .report {
+    width: 100%;
+    height: 70vh;
+    min-height: 520px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: #fff;
+  }
+
+  .after {
+    margin-top: 3.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+  }
+  .after h2 {
+    font-size: 1.35rem;
+  }
+  .after p {
+    color: var(--text-muted);
+    max-width: 68ch;
+    margin: 1rem 0 0;
+  }
+  .after strong,
+  .after em {
+    color: var(--text);
+  }
+  .after code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 0.3rem;
+    padding: 0.05em 0.3em;
+  }
+  .term {
+    margin-top: 1.25rem;
+    background: var(--text);
+    color: #eceafe;
+    border-radius: var(--radius);
+    padding: 1.1rem 1.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    line-height: 1.7;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .term-prompt {
+    color: color-mix(in srgb, #eceafe 55%, transparent);
+    user-select: none;
+  }
+  .term-c {
+    color: #8ee6c8;
+  }
+  .after-links {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .link-arrow {
+    color: var(--brand);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .link-arrow:hover {
+    text-decoration: underline;
+  }
+  .btn.sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.92rem;
+  }
+</style>

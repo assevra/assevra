@@ -68,7 +68,20 @@ class ScorerSpec:
     # and latency dimensions can be labeled by a project-wide budget rather than
     # a per-row field).
     is_labeled: Optional[Callable[..., bool]] = None
+    # Optional: (interaction, options) -> dict of extra row fields, or None.
+    # A scorer implements this when a *raw captured trace* can be scored with no
+    # human labeling at all — either because the dimension is self-labeling (a
+    # PII detector defines its own failure), because the answer key is already in
+    # the trace (grounding's context), or because the policy lives in the config
+    # rather than the row (the cost and latency budgets). This is what
+    # `assevra scan` runs on.
+    autolabel: Optional[Callable[..., Optional[dict]]] = None
+    autolabel_note: str = ""
     builtin: bool = False
+
+    @property
+    def zero_label(self) -> bool:
+        return self.autolabel is not None
 
     @property
     def needs_judge(self) -> bool:
@@ -130,6 +143,8 @@ def register_scorer_module(module: Any, replace: bool = False, builtin: bool = F
             label_hint=getattr(module, "LABEL_HINT", ""),
             validate_row=getattr(module, "validate_row", None),
             is_labeled=getattr(module, "is_labeled", None),
+            autolabel=getattr(module, "autolabel", None),
+            autolabel_note=getattr(module, "AUTOLABEL_NOTE", ""),
             builtin=builtin,
         )
     except AttributeError as exc:

@@ -41,6 +41,17 @@ LABEL_HINT = (
 )
 
 
+# Zero-label: same shape as cost — the budget is a policy line in the config, and
+# the measurement is already in the trace.
+AUTOLABEL_NOTE = "scored against budgets.latency_ms; no per-row labeling needed"
+
+
+def autolabel(interaction: dict, options: Optional[dict] = None):
+    if resolve_budget(interaction, options) is None:
+        return None
+    return {} if measured_latency(interaction) is not None else None
+
+
 def _default_budget(options: Optional[dict]):
     budgets = (options or {}).get("budgets", {}) or {}
     return budgets.get("latency_ms")

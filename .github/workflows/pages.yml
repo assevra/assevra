@@ -10,6 +10,8 @@ on:
     branches: [main]
     paths:
       - 'web/**'
+      - 'assevra/**'
+      - 'pyproject.toml'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -31,6 +33,37 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # /try runs Assevra in the visitor's browser under WebAssembly. It installs
+      # the wheel built from *this commit* rather than whatever is on PyPI, so the
+      # page can never score with a different engine than the docs describe.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build the wheel the browser will run
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel
+          cp dist/*.whl web/public/
+          ls -la web/public/*.whl
+
+      - name: Keep the served schemas identical to the packaged ones
+        run: |
+          pip install -e .
+          python - <<'PY'
+          import filecmp, pathlib, shutil
+          from assevra import schemas
+          served = pathlib.Path("web/public/schema/v1"); served.mkdir(parents=True, exist_ok=True)
+          for name in schemas.NAMES:
+              target = served / f"{name}.schema.json"
+              source = schemas.schema_path(name)
+              if not target.exists() or not filecmp.cmp(source, target, shallow=False):
+                  shutil.copyfile(source, target)
+                  print("synced", target)
+          print("schemas in sync")
+          PY
 
       - name: Set up Node
         uses: actions/setup-node@v4

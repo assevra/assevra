@@ -25,6 +25,14 @@ SUMMARY = "Is every factual claim traceable to the provided context, or invented
 ANSWER_KEY = ("context",)
 REQUIRES = ("agent_output",)
 LABEL_HINT = "Ensure `context` holds the ground truth the answer must follow from."
+# Zero-label: the answer key IS the context, and the trace already captured it.
+AUTOLABEL_NOTE = "scored against the context captured in the trace"
+
+
+def autolabel(interaction: dict, options=None):
+    has_context = (interaction.get("context") or "").strip()
+    has_output = (interaction.get("agent_output") or "").strip()
+    return {} if (has_context and has_output) else None
 
 # Judge score (1-5) at or above which a row counts as grounded.
 ROW_PASS_JUDGE_SCORE = 4

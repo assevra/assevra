@@ -1,5 +1,5 @@
 {
-  "assevra_version": "0.4",
+  "assevra_version": "0.5",
   "overall_pass": true,
   "judge_model": "mock-judge",
   "dimensions": [

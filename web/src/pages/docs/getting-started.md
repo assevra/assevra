@@ -60,6 +60,27 @@ offline too:
 assevra demo --provider mock
 ```
 
+## 1b. The fast path: score real traces with nothing labeled
+
+Before writing a single label, point Assevra at traces you already have:
+
+```bash
+assevra scan --from traces.jsonl --tools tools.json
+```
+
+That scores PII leakage, grounding, cost, latency and tool calls — five
+dimensions, no answer key — and tells you exactly which dimensions it refused to
+guess at. Then cover three more with a generated, self-labeling suite:
+
+```bash
+assevra probe --out probes.jsonl
+assevra capture --from probes.jsonl --out answered.jsonl -- python my_agent.py
+assevra run --dataset answered.jsonl --gate
+```
+
+Full detail: [Zero-label scoring](/docs/zero-label). The rest of this page is the
+thorough path, for the dimensions that genuinely need your judgment.
+
 ## 2. Point it at your own system
 
 Assevra scores outputs you have **already captured**. So the first question is

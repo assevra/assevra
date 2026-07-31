@@ -50,6 +50,25 @@ LABEL_HINT = (
     "correct run must make)."
 )
 
+# Zero-label, given the agent's own tool spec: `assevra.toolspec` turns an
+# OpenAI/Anthropic/MCP tool definition into exactly the contract this dimension
+# checks, and `scan` passes it in through options. Nothing about *intent* is
+# derived — an allow-list and argument schemas say what the agent may do, never
+# which call was the right one.
+AUTOLABEL_NOTE = "contract derived from the agent's own tool spec (--tools)"
+
+
+def autolabel(interaction: dict, options: Optional[dict] = None):
+    contract = (options or {}).get("tool_contract") or {}
+    if not contract:
+        return None
+    if not interaction.get("tool_calls"):
+        return None
+    from .. import toolspec
+
+    return toolspec.as_row_fields(contract)
+
+
 _TYPES = {
     "string": str,
     "number": (int, float),
