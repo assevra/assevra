@@ -1,5 +1,6 @@
 ---
 import { Image } from 'astro:assets';
+import ReferenceSetup from '../../components/ReferenceSetup.astro';
 import logo from '../../assets/logo.png';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import before from '../../../public/examples/refund/before/scorecard.json';
@@ -43,8 +44,6 @@ const labels: Record<string, string> = {
   tool_call: 'Tool contracts',
   pii: 'Sensitive-data checks',
 };
-const command =
-  'pip install assevra==0.6.0\npython -m assevra.reference --out-dir reference-output';
 ---
 
 <BaseLayout
@@ -259,13 +258,11 @@ const command =
             without an API key.
           </p>
         </div><div class="terminal">
-          <div class="terminal-top">
-            <span>YOUR TERMINAL</span><button id="copy-run">Copy commands</button>
-          </div><pre><code id="run-command">{command}</code></pre><p>
+          <ReferenceSetup /><p>
             Open <code>reference-output/before/scorecard.html</code><br />and <code
               >reference-output/after/scorecard.html</code
             >.
-          </p><span id="copy-status" role="status"></span>
+          </p>
         </div>
       </section>
       <section class="chapter adapt">
@@ -334,17 +331,6 @@ const command =
             : 'Before the fix: two case types violate the policy.';
     })
   );
-  document.getElementById('copy-run')?.addEventListener('click', async () => {
-    const status = document.getElementById('copy-status');
-    try {
-      await navigator.clipboard.writeText(
-        document.getElementById('run-command')?.textContent ?? ''
-      );
-      if (status) status.textContent = 'Commands copied.';
-    } catch {
-      if (status) status.textContent = 'Select the commands above to copy them.';
-    }
-  });
 </script>
 <style>
   .brand {

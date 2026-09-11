@@ -1,0 +1,127 @@
+---
+const steps = [
+  ['Check Python (3.10 or newer)', 'python3 --version'],
+  ['Create an isolated environment', 'python3 -m venv .assevra-venv'],
+  ['Install Assevra', '.assevra-venv/bin/python -m pip install assevra==0.6.0'],
+  [
+    'Generate the before and after reports',
+    '.assevra-venv/bin/python -m assevra.reference --out-dir reference-output',
+  ],
+];
+---
+
+<div class="setup">
+  <p class="setup-title">macOS / Linux · Run each step in order</p>
+  <p class="setup-help">
+    Use the same folder for every step. Wait for each command to finish successfully before
+    continuing.
+  </p>
+  <ol>
+    {
+      steps.map(([label, command]) => (
+        <li>
+          <div class="step-heading">
+            <>
+              <span>{label}</span>
+              <button type="button" data-copy-setup={command} aria-label={`Copy: ${label}`}>
+                Copy
+              </button>
+            </>
+          </div>
+          <pre>
+            <code>{command}</code>
+          </pre>
+        </li>
+      ))
+    }
+  </ol>
+  <p class="setup-help">
+    If <code>python3</code> is missing or older than 3.10, <a
+      href="https://www.python.org/downloads/">install Python</a
+    >, reopen your terminal, and start at step 1. On Linux, if creating the environment fails,
+    install your distribution’s Python venv package first.
+  </p>
+  <p class="setup-help">Prefer no setup? <a href="/try">Try the browser sample →</a></p>
+  <span class="copy-status" role="status" aria-live="polite"></span>
+</div>
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-copy-setup]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const status = button.closest('.setup')?.querySelector('.copy-status');
+      try {
+        await navigator.clipboard.writeText(button.dataset.copySetup ?? '');
+        if (status)
+          status.textContent =
+            'One command copied. Paste it into your terminal, then wait for it to finish.';
+      } catch {
+        if (status) status.textContent = 'Select the command text to copy it manually.';
+      }
+    });
+  });
+</script>
+<style>
+  .setup {
+    min-width: 0;
+  }
+  .setup-title {
+    color: #dcd8ff;
+    font-size: 13px;
+    font-weight: 650;
+    margin: 0 0 12px;
+  }
+  .setup-help {
+    font-size: 12px;
+    line-height: 1.7;
+    color: #c4c3d3;
+  }
+  .setup-help a {
+    color: #ddd6fe;
+    text-decoration: underline;
+  }
+  ol {
+    margin: 20px 0;
+    padding-left: 20px;
+  }
+  li {
+    padding-left: 3px;
+    margin: 18px 0;
+    color: #c4c3d3;
+    font-size: 12px;
+  }
+  .step-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  button {
+    border: 1px solid #747089;
+    border-radius: 5px;
+    color: #fff;
+    background: transparent;
+    padding: 5px 10px;
+    cursor: pointer;
+    font: inherit;
+  }
+  button:hover {
+    background: #373148;
+  }
+  button:focus-visible {
+    outline: 2px solid #c4b5fd;
+    outline-offset: 3px;
+  }
+  pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: #f5f3ff;
+    font-size: 12px;
+    line-height: 1.7;
+    margin: 8px 0 0;
+  }
+  .copy-status {
+    display: block;
+    color: #ddd6fe;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+</style>

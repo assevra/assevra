@@ -1,16 +1,49 @@
 ---
 layout: ../../layouts/DocsLayout.astro
 title: Getting started
-description: From pip install to a scorecard that gates your build — in four commands.
+description: Install in an isolated Python environment, run the example, and evaluate your agent.
 eyebrow: Start here
 ---
 
 ## 1. Run a complete local example
 
+On macOS or Linux, run each command separately in the same folder. Continue only after the previous command succeeds.
+
+Check that Python 3.10 or newer is installed:
+
 ```bash
-pip install assevra==0.6.0
-python -m assevra.reference --out-dir reference-output
+python3 --version
 ```
+
+If the command is missing or the version is too old, [install Python](https://www.python.org/downloads/), reopen the terminal, and check again. On Linux, you may also need your distribution's Python venv package.
+
+Create an isolated environment:
+
+```bash
+python3 -m venv .assevra-venv
+```
+
+Install Assevra into that environment:
+
+```bash
+.assevra-venv/bin/python -m pip install assevra==0.6.0
+```
+
+Generate the reports:
+
+```bash
+.assevra-venv/bin/python -m assevra.reference --out-dir reference-output
+```
+
+For the remaining commands on this page, activate the environment in your current terminal:
+
+```bash
+source .assevra-venv/bin/activate
+```
+
+On Windows, use `py -3` instead of `python3` to check Python and create the environment, `.assevra-venv\Scripts\python.exe` for installation and running the example, and `.assevra-venv\Scripts\Activate.ps1` to activate it in PowerShell.
+
+For a sample with no installation, [try the browser scan](/try).
 
 Python 3.10+ is required. Open `reference-output/before/scorecard.html` and `reference-output/after/scorecard.html`.
 

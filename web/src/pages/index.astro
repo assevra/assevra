@@ -1,5 +1,6 @@
 ---
 import { Image } from 'astro:assets';
+import ReferenceSetup from '../components/ReferenceSetup.astro';
 import logo from '../assets/logo.png';
 import BaseLayout from '../layouts/BaseLayout.astro';
 const GH = 'https://github.com/assevra/assevra';
@@ -346,12 +347,7 @@ const integrations = [
           </p>
         </div>
         <div class="terminal">
-          <div class="terminal-heading">
-            YOUR TERMINAL <button id="copy-example" type="button">Copy commands</button>
-          </div><pre><code id="example-command">pip install assevra==0.6.0
-python -m assevra.reference --out-dir reference-output</code></pre><div
-            class="terminal-result"
-          >
+          <ReferenceSetup /><div class="terminal-result">
             <span>before → FAIL</span><span>after → PASS</span>
           </div><p>Open <code>reference-output/after/scorecard.html</code></p><a
             href="/examples/refund">Explore the complete walkthrough →</a
@@ -577,17 +573,6 @@ python -m assevra.reference --out-dir reference-output</code></pre><div
       const link = document.getElementById('example-artifact') as HTMLAnchorElement;
       link.href = `/examples/refund/${state.artifact}/scorecard.html`;
     });
-  });
-  document.getElementById('copy-example')?.addEventListener('click', async (event) => {
-    const button = event.currentTarget as HTMLButtonElement;
-    try {
-      await navigator.clipboard.writeText(
-        document.getElementById('example-command')?.textContent ?? ''
-      );
-      button.textContent = 'Copied';
-    } catch {
-      button.textContent = 'Select commands to copy';
-    }
   });
 </script>
 <style>
