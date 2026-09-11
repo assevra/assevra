@@ -1,4 +1,6 @@
 ---
+import { Image } from 'astro:assets';
+import logo from '../../assets/logo.png';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import before from '../../../public/examples/refund/before/scorecard.json';
 import after from '../../../public/examples/refund/after/scorecard.json';
@@ -51,7 +53,8 @@ const command =
 >
   <div class="walkthrough">
     <header>
-      <a class="brand" href="/">assevra<span>.</span></a><nav aria-label="Example navigation">
+      <a class="brand" href="/"><Image src={logo} alt="Assevra" width={340} loading="eager" /></a
+      ><nav aria-label="Example navigation">
         <a href="/">Product</a><a href="/docs">Docs</a><a href="/try">Try your traces ↗</a>
       </nav>
     </header>
@@ -344,6 +347,22 @@ const command =
   });
 </script>
 <style>
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .brand :global(img) {
+    width: 165px;
+    height: auto;
+    mix-blend-mode: multiply;
+  }
+  @media (max-width: 450px) {
+    .brand :global(img) {
+      width: 136px;
+    }
+  }
+
   :global(body) {
     background: #faf9f6;
   }

@@ -1,4 +1,6 @@
 ---
+import { Image } from 'astro:assets';
+import logo from '../assets/logo.png';
 import BaseLayout from '../layouts/BaseLayout.astro';
 const GH = 'https://github.com/assevra/assevra';
 const dimensions = [
@@ -140,7 +142,9 @@ const integrations = [
   </div>
   <div class="home-wrap">
     <header class="home-header">
-      <a href="/" class="wordmark" aria-label="Assevra home">assevra<span>.</span></a>
+      <a href="/" class="wordmark" aria-label="Assevra home"
+        ><Image src={logo} alt="Assevra" width={340} loading="eager" /></a
+      >
       <nav aria-label="Main navigation">
         <a href="#dimensions">Capabilities</a><a href="#workflow">How it works</a><a
           href="#integrations">Integrations</a
@@ -489,9 +493,8 @@ python -m assevra.reference --out-dir reference-output</code></pre><div
       </section>
     </main>
     <footer>
-      <a class="wordmark" href="/">assevra<span>.</span></a><p>
-        Open-source release evidence for AI agents.
-      </p><div>
+      <a class="wordmark" href="/"><Image src={logo} alt="Assevra" width={340} loading="eager" /></a
+      ><p>Open-source release evidence for AI agents.</p><div>
         <a href={GH}>GitHub</a><a href="https://pypi.org/project/assevra/">PyPI</a><a
           href="https://doi.org/10.5281/zenodo.21200852">Cite Assevra</a
         ><a href="/docs">Documentation</a>
@@ -586,6 +589,22 @@ python -m assevra.reference --out-dir reference-output</code></pre><div
   });
 </script>
 <style>
+  .wordmark {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .wordmark :global(img) {
+    width: 165px;
+    height: auto;
+    mix-blend-mode: multiply;
+  }
+  @media (max-width: 450px) {
+    .wordmark :global(img) {
+      width: 136px;
+    }
+  }
+
   .stack-band {
     display: flex;
     flex-wrap: wrap;
