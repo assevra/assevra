@@ -155,7 +155,9 @@ const integrations = [
       <section class="hero">
         <div>
           <p class="eyebrow">Agent evaluation. From failure to verified fix.</p>
-          <h1>Find agent failures<br />before your users do.</h1>
+          <h1>
+            Find agent failures<br /><span class="headline-accent">before your users do.</span>
+          </h1>
           <p class="intro">
             Turn captured agent runs into a clear decision: what failed, what to change, and whether
             the fix holds.
@@ -907,6 +909,32 @@ python -m assevra.reference --out-dir reference-output</code></pre><div
     letter-spacing: -2.5px;
     margin: 0 0 25px;
     font-weight: 650;
+  }
+  .headline-accent {
+    position: relative;
+    color: #5843bc;
+    background: linear-gradient(110deg, #4338ca 0%, #7450bd 55%, #285eae 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .headline-accent::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -10px;
+    width: 72px;
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #6350cf, #a5b4fc, transparent);
+  }
+  @media (forced-colors: active) {
+    .headline-accent {
+      background: none;
+      -webkit-text-fill-color: CanvasText;
+    }
   }
   h2 {
     font-size: 32px;
