@@ -140,7 +140,7 @@ def test_a_provider_sdk_error_becomes_a_parse_error_not_a_crash():
 
     judge = J.Judge(model="x", complete=_boom)
     result = judge.score_json("anything")
-    assert "_parse_error" in result and "rate limited" in result["_parse_error"]
+    assert "_parse_error" in result and "RuntimeError" in result["_parse_error"] and "rate limited" not in result["_parse_error"]
 
 
 def test_json_is_extracted_from_prose_and_code_fences():

@@ -161,6 +161,7 @@ def scan(
             # These rows were built by the scorers themselves, so re-deriving
             # their labeled-ness would only restate what we just decided.
             validate=False,
+            purpose="scan",
         )
         scorecard.dataset = f"{source} (scan, auto-labeled)"
 
@@ -173,6 +174,9 @@ def scan(
                 del coverage.scored[dimension.name]
                 coverage.unavailable[dimension.name] = dimension.skip_reason
 
+    if scorecard is not None:
+        scorecard.purpose = "scan"
+        scorecard.coverage.update({"scored": coverage.scored, "needs_labels": coverage.needs_labels, "unavailable": coverage.unavailable, "interactions": len(interactions)})
     return ScanResult(
         scorecard=scorecard,
         coverage=coverage,

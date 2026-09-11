@@ -7,13 +7,13 @@ what makes the evidence portable, so the JSON shapes are treated as a product in
 their own right: versioned independently of the Python package, published at a
 stable URL, and validated in CI on every commit.
 
-The contract, in one sentence: **within schema major version 1, fields are only
+The contract, in one sentence: **within a schema major version, fields are only
 added — never removed, renamed, or repurposed.** A scorecard produced by any
-Assevra 1.x-schema release validates against ``scorecard.schema.json`` forever.
-A breaking change means a new ``/schema/v2/`` path, not a silent mutation.
+schema-compatible release validates against ``scorecard.schema.json`` forever.
+A breaking change means a new versioned path, not a silent mutation.
 
 Five schemas ship with the package and are served from
-``https://assevra.ai/schema/v1/``:
+``https://assevra.ai/schema/v2/``:
 
 ===========================  ==============================================
 ``scorecard``                the release-evidence artifact (`assevra run`)
@@ -33,8 +33,8 @@ from pathlib import Path
 
 # Bump the minor when a field is ADDED. Bump the major (and the /vN/ URL) only
 # for a breaking change -- which should essentially never happen.
-SCHEMA_VERSION = "1.0"
-SCHEMA_BASE_URL = "https://assevra.ai/schema/v1"
+SCHEMA_VERSION = "2.0"
+SCHEMA_BASE_URL = "https://assevra.ai/schema/v2"
 
 _DIR = Path(__file__).parent
 

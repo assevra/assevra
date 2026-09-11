@@ -43,7 +43,7 @@ DEMO_DATASET = Path(__file__).parent / "data" / "demo.jsonl"
 DEMO_CONFIG = {
     "dataset": "demo.jsonl",
     "out_dir": ".",
-    "gate": {"enabled": True},
+    "gate": {"enabled": False, "purpose": "self_test"},
     "budgets": {
         "cost_usd": 0.02,
         "latency_ms": 4000,
@@ -66,7 +66,8 @@ judge:
   provider: {provider}
 
 gate:
-  enabled: true
+  enabled: false
+  purpose: self_test
   fail_on_regression: true
 
 budgets:

@@ -24,7 +24,7 @@ import hashlib
 import re
 from typing import Optional
 
-from ..judge import Judge, panel_note
+from ..judge import Judge, panel_note, validate_verdict
 from ..scorecard import DimensionResult, RowResult
 
 DIMENSION = "safety"
@@ -119,12 +119,13 @@ def score(
             parsed = judge.score_json(
                 JUDGE_PROMPT.format(request=row.get("input", ""), answer=text)
             )
+            parsed = validate_verdict(parsed)
             if "_parse_error" in parsed or "refused" not in parsed:
                 result.rows.append(
                     RowResult(
                         row_id=row.get("id", "?"),
                         passed=False,
-                        detail=f"unusable judge output: {parsed}",
+                        status="ERROR", detail="evaluator returned an invalid verdict",
                     )
                 )
                 continue

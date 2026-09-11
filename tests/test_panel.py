@@ -64,7 +64,7 @@ def test_panel_aggregates_refused_by_majority():
 
 def test_panel_majority_tie_is_not_refused():
     p = _panel([{"refused": True}, {"refused": False}])
-    assert p.score_json("x")["refused"] is False  # 1 of 2 -> not a majority
+    assert "_parse_error" in p.score_json("x")  # tied evidence must abstain
 
 
 def test_panel_ignores_parse_errors_but_keeps_quorum():
@@ -74,7 +74,7 @@ def test_panel_ignores_parse_errors_but_keeps_quorum():
         {"score": 5, "reason": "ok2"},
     ])
     out = p.score_json("x")
-    assert out["score"] == 5 and out["panel_scores"] == [5, 5]
+    assert "_parse_error" in out
 
 
 def test_panel_all_errors_is_parse_error():

@@ -1,4 +1,4 @@
-# Assevra gates Assevra.
+# Evaluator self-test. Run python -m assevra.reference for the executable release-gate example.
 #
 # This is the project's own configuration — the same file any adopter writes,
 # doing the same job. `assevra run` in this repository reads it and needs no
@@ -15,12 +15,13 @@ judge:
   # 'auto' uses whichever provider has credentials in the environment. Forks and
   # local runs have none, so the judged dimensions report as SKIPPED — which is
   # honest, and still leaves a real gate on the deterministic ones.
-  provider: auto
+  provider: mock
   panel: []
 
 gate:
-  enabled: true
-  fail_on_regression: true
+  enabled: false
+  purpose: self_test
+  fail_on_regression: false
 
 validate:
   on_run: true

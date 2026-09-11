@@ -115,7 +115,7 @@ def test_tool_call_enforces_enums_and_expected_calls():
 
 def test_tool_call_without_a_contract_says_nothing_to_verify():
     result = _one(T.score([{"id": "a", "tool_calls": [{"name": "f"}]}]))
-    assert result.passed is True and "nothing to verify" in result.detail
+    assert result.status == "ERROR" and "nothing to verify" in result.detail
 
 
 def test_tool_call_reads_the_openai_function_shape():
@@ -276,7 +276,7 @@ def test_row_budget_overrides_the_project_budget():
 def test_unpriceable_cost_is_unverified_rather_than_failed():
     options = {"budgets": {"cost_usd": 0.10}}
     result = _one(C.score([{"id": "a", "usage": {"input_tokens": 10}}], None, options))
-    assert result.passed is True and "nothing verified" in result.detail
+    assert result.status == "ERROR" and "nothing verified" in result.detail
     assert C.is_labeled({"id": "a", "usage": {"input_tokens": 10}}, options) is False
 
 

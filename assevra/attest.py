@@ -149,13 +149,23 @@ def build_card_dict(scorecard: dict, signature: dict = None, generated_at: str =
         "assevra_version": scorecard.get("assevra_version"),
         "dataset": scorecard.get("dataset"),
         "overall_pass": scorecard.get("overall_pass"),
+        "decision": scorecard.get("decision", "INCOMPLETE"),
+        "purpose": scorecard.get("purpose", "unknown"),
+        "coverage": scorecard.get("coverage", {}),
+        "required_dimensions": scorecard.get("required_dimensions", []),
         "frameworks": FRAMEWORKS,
         "dimensions": dims_out,
         "reliability_mappings": reliability_out,
         "disclaimer": DISCLAIMER,
     }
     if signature:
+        from .signing import verify_scorecard, SigningError
+        verification = verify_scorecard(scorecard, signature)
+        if not verification.ok:
+            raise SigningError("refusing to attach an invalid scorecard signature")
         card["signature"] = {
+            "integrity_verified": True,
+            "identity_verified": False,
             "algorithm": signature.get("algorithm"),
             "public_key": signature.get("public_key"),
             "content_sha256": signature.get("content_sha256"),
@@ -178,7 +188,7 @@ def render_markdown(card: dict) -> str:
     meta.append(f"dataset `{card.get('dataset') or 'n/a'}`")
     lines.append(" · ".join(meta))
     lines.append("")
-    lines.append(f"**Overall scorecard verdict: {'PASS' if card.get('overall_pass') else 'FAIL'}**")
+    lines.append(f"**Overall scorecard verdict: {card.get('decision', 'INCOMPLETE')}**")
     if card.get("signature"):
         sig = card["signature"]
         sha = (sig.get("content_sha256") or "")[:12]

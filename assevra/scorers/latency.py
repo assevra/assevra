@@ -103,7 +103,7 @@ def score(rows: list[dict], judge: Optional[object] = None, options: Optional[di
 
         if budget is None:
             result.rows.append(
-                RowResult(row_id=row_id, passed=True, detail="no latency budget set (nothing to verify)")
+                RowResult(row_id=row_id, passed=False, status="ERROR", detail="no latency budget set (nothing to verify)")
             )
             continue
         if latency is None:
@@ -112,7 +112,7 @@ def score(rows: list[dict], judge: Optional[object] = None, options: Optional[di
             result.rows.append(
                 RowResult(
                     row_id=row_id,
-                    passed=True,
+                    passed=False, status="ERROR",
                     detail="no latency_ms recorded, nothing verified",
                 )
             )

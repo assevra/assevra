@@ -4,6 +4,19 @@ All notable changes to Assevra are recorded here. The project follows
 semantic-ish versioning; the reported "measured with Assevra vX.Y" number is
 bumped whenever a scorer or rubric change could change a reported score.
 
+## 0.6.0 — 2026-09-11
+
+- Explicit PASS / FAIL / INCOMPLETE / TRIAGE / SELF_TEST decisions and required release coverage; strict validation cannot be bypassed by release runs.
+- Actionable case findings and verification guidance in HTML, Markdown, and JSON.
+- Invalid judge verdicts and incomplete/tied panels block release; evaluator errors are excluded from agent pass rates. PII detector controls are separate and matched sensitive values are redacted.
+- Full JSON Schema tool contracts, final-state assertions, preserved trace identity, improved capture/export recipes, and capture completion manifests.
+- Comparable-suite/policy provenance and blocking behavior for missing or incompatible required baselines.
+- Executable refund workflow demonstrates a failing agent branch and a passing reviewed fix with the same assertions.
+- Schema v2 contracts; hosted v1 schemas preserved. Composite Action package pin and safe shell input handling.
+- Revised website, local browser triage coverage, explicit token prices, Astro 7.3.2 and dependency security updates.
+
+See [migration notes](docs/MIGRATING-0.6.md). This is an open-source beta; synthetic examples do not establish performance on customer pipelines.
+
 ## [0.5.0] — 2026-07-31
 
 The zero-label release. 0.4 made Assevra adoptable in about five minutes of

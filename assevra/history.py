@@ -54,9 +54,26 @@ def record_from_scorecard(scorecard, label: str, timestamp: str) -> dict:
         "label": label,
         "dataset": scorecard.dataset,
         "judge_model": scorecard.judge_model,
+        "judge_provider": scorecard.judge_provider,
+        "policy_sha256": scorecard.policy_sha256,
+        "suite_sha256": scorecard.suite_sha256,
+        "decision": scorecard.decision,
         "overall_pass": scorecard.overall_pass,
         "dimensions": dims,
     }
+
+
+def comparability(baseline: dict, current: dict) -> list[str]:
+    reasons = []
+    if baseline.get("decision") not in ("PASS", "FAIL"):
+        reasons.append("baseline is not complete release evidence")
+    for key in ("suite_sha256", "policy_sha256"):
+        if not baseline.get(key) or baseline.get(key) != current.get(key):
+            reasons.append(f"{key} differs or is missing")
+    for key in ("judge_model", "judge_provider"):
+        if baseline.get(key) != current.get(key):
+            reasons.append(f"{key} differs")
+    return reasons
 
 
 def load_history(history_path: str) -> list[dict]:

@@ -56,8 +56,8 @@ def test_evaluate_refuses_an_invalid_dataset():
 
 
 def test_validation_can_be_turned_off_deliberately():
-    card = evaluate(records=[dict(TASK_ROW, must_include=[])], config={}, strict=True, validate=False)
-    assert card.overall_pass is True
+    card = evaluate(records=[dict(TASK_ROW, must_include=[])], config={}, strict=True, validate=False, purpose="scan")
+    assert card.decision == "TRIAGE" and not card.overall_pass
 
 
 def test_thresholds_can_be_overridden_per_call_and_by_config():

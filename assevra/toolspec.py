@@ -82,7 +82,7 @@ def detect_shape(doc: Any) -> Optional[str]:
 
 def _schema_to_contract(schema: Any) -> dict:
     """Turn one tool's JSON Schema into Assevra's argument contract."""
-    contract: dict[str, Any] = {}
+    contract: dict[str, Any] = {"json_schema": schema}
     if not isinstance(schema, dict):
         return contract
 

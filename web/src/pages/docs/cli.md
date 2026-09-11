@@ -97,7 +97,7 @@ message carries a stable code — `unknown_dimension`, `missing_answer_key`,
 
 ## assevra demo
 
-A full worked example. No clone, no API key, no network.
+A full worked example. No clone or API key; runs locally after package installation.
 
 ```bash
 assevra demo

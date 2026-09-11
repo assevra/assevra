@@ -5,9 +5,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 // it into web/public/), falling back to PyPI for local dev where that build step
 // has not run. Pinning it to the site's own build is what stops the browser
 // scoring with a different engine than the one the docs describe.
-const VERSION = '0.5.0';
+const VERSION = '0.6.0';
 const WHEEL = `/assevra-${VERSION}-py3-none-any.whl`;
-const FALLBACK = `assevra==${VERSION}`;
 const PYODIDE = 'https://cdn.jsdelivr.net/pyodide/v0.28.3/full/';
 ---
 
@@ -48,12 +47,33 @@ const PYODIDE = 'https://cdn.jsdelivr.net/pyodide/v0.28.3/full/';
 
     <div class="row">
       <button type="button" id="sample" class="btn btn-ghost sm">Use a sample file</button>
+      <label class="budgets"
+        >Tool definitions (optional) <input id="tools-file" type="file" accept=".json" /></label
+      >
       <label class="budgets">
         cost budget $<input id="cost" type="number" step="0.01" min="0" value="0.02" />
       </label>
       <label class="budgets">
         latency budget <input id="latency" type="number" step="100" min="0" value="2500" /> ms
       </label>
+      <label class="budgets"
+        >Input $/M tokens <input
+          id="input-price"
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="optional"
+        /></label
+      >
+      <label class="budgets"
+        >Output $/M tokens <input
+          id="output-price"
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="optional"
+        /></label
+      >
     </div>
 
     <p id="status" class="status" role="status" aria-live="polite">
@@ -98,7 +118,7 @@ const PYODIDE = 'https://cdn.jsdelivr.net/pyodide/v0.28.3/full/';
     </section>
   </main>
 
-  <script is:inline define:vars={{ WHEEL, FALLBACK, VERSION, PYODIDE }}>
+  <script is:inline define:vars={{ WHEEL, VERSION, PYODIDE }}>
     const el = (id) => document.getElementById(id);
     const statusEl = el('status');
     let pyodide = null;
@@ -146,14 +166,9 @@ const PYODIDE = 'https://cdn.jsdelivr.net/pyodide/v0.28.3/full/';
         const py = await mod.loadPyodide({ indexURL: PYODIDE });
         setStatus(`Loading Assevra ${VERSION}…`, 'busy');
         await py.loadPackage('micropip');
+        await py.loadPackage('jsonschema');
         const micropip = py.pyimport('micropip');
-        try {
-          // The wheel this site was built from — one HTTP request, same origin.
-          await micropip.install(new URL(WHEEL, location.origin).href);
-        } catch {
-          // Local dev, where the wheel has not been built into public/.
-          await micropip.install(FALLBACK);
-        }
+        await micropip.install(new URL(WHEEL, location.origin).href);
         pyodide = py;
         return py;
       })();
@@ -164,25 +179,25 @@ const PYODIDE = 'https://cdn.jsdelivr.net/pyodide/v0.28.3/full/';
 import json, pathlib
 from assevra import scan as scan_mod
 
-def run_scan(cost_budget, latency_budget):
+def run_scan(cost_budget, latency_budget, input_price, output_price):
     cfg = {"budgets": {
         "cost_usd": cost_budget or None,
         "latency_ms": latency_budget or None,
-        "price": {"input_per_mtok": 3.0, "output_per_mtok": 15.0},
+        "price": {"input_per_mtok": input_price if input_price >= 0 else None, "output_per_mtok": output_price if output_price >= 0 else None},
     }}
-    result = scan_mod.scan("/tmp/traces.jsonl", config=cfg, judge_provider="none", root="/tmp")
+    result = scan_mod.scan("/tmp/traces.jsonl", config=cfg, judge_provider="none", root="/tmp", tools="/tmp/tools.json" if pathlib.Path("/tmp/tools.json").exists() else None)
     payload = {
         "interactions": result.interactions,
         "format": result.trace_format,
         "scored": result.coverage.scored,
         "unavailable": result.coverage.unavailable,
         "needs_labels": result.coverage.needs_labels,
-        "html": "", "json": "", "overall": None,
+        "html": "", "json": "", "decision": "TRIAGE",
     }
     if result.scorecard is not None:
         payload["html"] = result.scorecard.render_html()
         payload["json"] = result.scorecard.to_json()
-        payload["overall"] = result.scorecard.overall_pass
+        payload["decision"] = result.scorecard.decision
     return json.dumps(payload)
 `;
 
@@ -190,10 +205,25 @@ def run_scan(cost_budget, latency_budget):
       const py = await boot();
       setStatus('Scoring…', 'busy');
       py.FS.writeFile('/tmp/traces.jsonl', text);
+      const toolFile = el('tools-file').files[0];
+      if (toolFile) {
+        if (toolFile.size > 2 * 1024 * 1024)
+          throw new Error('Tool definitions must be under 2 MB.');
+        py.FS.writeFile('/tmp/tools.json', await toolFile.text());
+      } else if (py.FS.analyzePath('/tmp/tools.json').exists) {
+        py.FS.unlink('/tmp/tools.json');
+      }
       py.runPython(SCORE_PY);
       const costBudget = parseFloat(el('cost').value) || 0;
       const latencyBudget = parseFloat(el('latency').value) || 0;
-      const raw = py.globals.get('run_scan')(costBudget, latencyBudget);
+      const inputPrice = parseFloat(el('input-price').value);
+      const outputPrice = parseFloat(el('output-price').value);
+      const raw = py.globals.get('run_scan')(
+        costBudget,
+        latencyBudget,
+        Number.isFinite(inputPrice) ? inputPrice : -1,
+        Number.isFinite(outputPrice) ? outputPrice : -1
+      );
       const out = JSON.parse(raw);
 
       const coverage = el('coverage');
@@ -220,8 +250,8 @@ def run_scan(cost_budget, latency_budget):
 
       lastHtml = out.html;
       lastJson = out.json;
-      el('verdict').textContent = out.overall ? 'Scorecard — PASS' : 'Scorecard — FAIL';
-      el('verdict').dataset.verdict = out.overall ? 'pass' : 'fail';
+      el('verdict').textContent = 'Scorecard — TRIAGE (partial coverage)';
+      el('verdict').dataset.verdict = 'triage';
       el('report').srcdoc = out.html;
       el('result').hidden = false;
       setStatus(

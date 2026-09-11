@@ -22,6 +22,7 @@ scorecard-preview.png
 !examples/**
 !docs/example-scorecard.html
 !web/public/example-scorecard.html
+!web/public/examples/**
 
 # Signing keys — never commit a private key
 *.pem

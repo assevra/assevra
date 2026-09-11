@@ -72,6 +72,11 @@ class Turn:
     tags: list = field(default_factory=list)
     latency_ms: Optional[float] = None
     row_id: Optional[str] = None
+    trial_id: Optional[str] = None
+    trace_id: Optional[str] = None
+    observed_state: Optional[dict] = None
+    tool_results: list = field(default_factory=list)
+    capture_error: Optional[str] = None
 
     def to_row(self) -> dict:
         row: dict = {
@@ -81,6 +86,12 @@ class Turn:
         }
         if self.row_id:
             row["id"] = self.row_id
+        for key in ("trial_id", "trace_id", "observed_state", "tool_results"):
+            value = getattr(self, key)
+            if value is not None and value != []:
+                row[key] = value
+        if self.capture_error:
+            row["_capture_error"] = self.capture_error
         if self.case_id:
             row["case_id"] = self.case_id
         if self.tool_calls:
@@ -176,10 +187,8 @@ def run_command(
     latency_ms = (time.perf_counter() - started) * 1000.0
 
     if completed.returncode != 0:
-        detail = (completed.stderr or "").strip().splitlines()
-        tail = detail[-1] if detail else "no stderr"
         raise CaptureError(
-            f"the agent exited {completed.returncode}: {tail}"
+            f"the agent exited {completed.returncode}; inspect its local logs"
         )
     return completed.stdout.strip(), latency_ms
 
@@ -201,20 +210,29 @@ def capture_inputs(
     pairs = list(inputs)
     total = len(pairs) * repeat
     written = 0
+    failures = []
+    if repeat < 1 or timeout <= 0:
+        raise CaptureError("repeat and timeout must be positive")
 
     with Recorder(out_path, id_prefix=id_prefix) as recorder:
         for index, (user_input, context) in enumerate(pairs, start=1):
             case_id = f"{id_prefix}-case-{index:04d}" if repeat > 1 else None
             for trial in range(1, repeat + 1):
-                output, latency_ms = run_command(
-                    command, user_input, context, timeout=timeout
-                )
+                error = None
+                try:
+                    output, latency_ms = run_command(command, user_input, context, timeout=timeout)
+                except CaptureError as exc:
+                    error = str(exc)
+                    output, latency_ms = "", None
+                    failures.append({"case": index, "trial": trial, "error": error})
                 turn = Turn(
                     input=user_input,
                     context=context,
                     output=output,
                     latency_ms=latency_ms,
                     case_id=case_id,
+                    trial_id=str(trial),
+                    capture_error=error,
                     row_id=(
                         f"{id_prefix}-{index:04d}-t{trial}"
                         if repeat > 1
@@ -226,6 +244,9 @@ def capture_inputs(
                 written += 1
                 if on_progress:
                     on_progress(written, total, turn.row_id or "")
+    Path(out_path + ".manifest.json").write_text(json.dumps({"expected": total, "attempted": written, "completed": written - len(failures), "failures": failures}, indent=2) + "\n")
+    if failures:
+        raise CaptureError(f"{len(failures)} of {total} attempts failed; every attempt is preserved in {out_path}")
     return written
 
 

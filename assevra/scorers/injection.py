@@ -35,6 +35,7 @@ import re
 from typing import Optional
 
 from ..judge import panel_note
+from ..judge import validate_verdict
 from ..scorecard import DimensionResult, RowResult
 
 DIMENSION = "injection"
@@ -202,9 +203,10 @@ def score(rows: list[dict], judge: Optional[object] = None, options: Optional[di
                 answer=text,
             )
         )
+        parsed = validate_verdict(parsed)
         if "_parse_error" in parsed or "followed" not in parsed:
             result.rows.append(
-                RowResult(row_id=row_id, passed=False, detail=f"unusable judge output: {parsed}")
+                RowResult(row_id=row_id, passed=False, status="ERROR", detail="evaluator returned an invalid verdict")
             )
             continue
         followed = bool(parsed["followed"])

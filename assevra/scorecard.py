@@ -22,7 +22,7 @@ from . import schemas as _schemas
 
 # Bump this when a change to a scorer or rubric would change a reported number.
 # Report scores as "measured with Assevra v0.4".
-ASSEVRA_VERSION = "0.5"
+ASSEVRA_VERSION = "0.6.0"
 
 # Citation provenance. Stamped into every report so attribution travels with the
 # artifact: anyone who shares a scorecard carries the DOI with it. Concept DOI
@@ -61,9 +61,22 @@ class RowResult:
     detail: str = ""
     # Raw judge score (e.g. 1-5) when a dimension is scored by an LLM judge.
     raw_score: Optional[float] = None
+    status: str = ""
+    case_id: str = ""
+    trace_id: str = ""
+
+    def __post_init__(self):
+        if not self.status:
+            self.status = "PASS" if self.passed else "FAIL"
+        if self.status not in ("PASS", "FAIL", "ERROR", "ABSTAIN"):
+            raise ValueError("invalid row status")
+        if self.status in ("ERROR", "ABSTAIN"):
+            self.passed = False
 
     def to_dict(self) -> dict:
-        d = {"id": self.row_id, "passed": self.passed, "detail": self.detail}
+        d = {"id": self.row_id, "passed": self.passed, "detail": self.detail,
+             "status": self.status, "case_id": self.case_id or self.row_id,
+             "trace_id": self.trace_id or None}
         if self.raw_score is not None:
             d["raw_score"] = self.raw_score
         return d
@@ -88,11 +101,11 @@ class DimensionResult:
 
     @property
     def n(self) -> int:
-        return len(self.rows)
+        return sum(r.status in ("PASS", "FAIL") for r in self.rows)
 
     @property
     def passes(self) -> int:
-        return sum(1 for r in self.rows if r.passed)
+        return sum(1 for r in self.rows if r.passed and r.status == "PASS")
 
     @property
     def score(self) -> float:
@@ -105,7 +118,7 @@ class DimensionResult:
     @property
     def passed(self) -> Optional[bool]:
         """True/False against the threshold, or None if skipped."""
-        if self.skipped:
+        if self.skipped or not self.n or any(r.status in ("ERROR", "ABSTAIN") for r in self.rows):
             return None
         return self.score >= self.threshold
 
@@ -119,6 +132,8 @@ class DimensionResult:
             "skip_reason": self.skip_reason,
             "notes": self.notes,
             "sample_size": self.n,
+            "attempted": len(self.rows),
+            "evaluation_errors": sum(r.status in ("ERROR", "ABSTAIN") for r in self.rows),
             "passes": self.passes,
             "score": round(self.score, 4),
             "ci_95": [round(lo, 4), round(hi, 4)],
@@ -143,6 +158,39 @@ class Scorecard:
     judge_provider: str = ""
     dataset_sha256: Optional[str] = None
     generated_at: Optional[str] = None
+    purpose: str = "release"
+    required_dimensions: list[str] = field(default_factory=list)
+    validation: dict = field(default_factory=dict)
+    coverage: dict = field(default_factory=dict)
+    controls: list[dict] = field(default_factory=list)
+    policy_sha256: str = ""
+    suite_sha256: str = ""
+    comparison: dict = field(default_factory=dict)
+
+    @property
+    def missing_dimensions(self) -> list[str]:
+        required = self.required_dimensions or [d.name for d in self.dimensions]
+        return [name for name in required if self.dimension(name) is None
+                or self.dimension(name).skipped or not self.dimension(name).n]
+
+    @property
+    def decision(self) -> str:
+        if self.purpose != "release" or self.judge_provider == "mock":
+            return "SELF_TEST" if self.purpose == "self_test" or self.judge_provider == "mock" else "TRIAGE"
+        if (not self.dimensions or self.missing_dimensions
+                or any(d.passed is None for d in self.dimensions)
+                or self.validation.get("complete") is False):
+            return "INCOMPLETE"
+        if self.comparison.get("required") and self.comparison.get("status") != "comparable":
+            return "INCOMPLETE"
+        if self.comparison.get("required") and self.comparison.get("regressed"):
+            return "FAIL"
+        return "PASS" if all(d.passed for d in self.dimensions) else "FAIL"
+
+    @property
+    def findings(self) -> list[dict]:
+        from .findings import build
+        return build(self)
 
     def scored_dimensions(self) -> list[DimensionResult]:
         return [d for d in self.dimensions if not d.skipped]
@@ -168,10 +216,7 @@ class Scorecard:
         Reliability is a conjunction: a strong grounding score does not buy back
         a PII leak. A run with every relevant dimension skipped is not a pass.
         """
-        scored = self.scored_dimensions()
-        if not scored:
-            return False
-        return all(d.passed for d in scored)
+        return self.decision == "PASS"
 
     def to_dict(self) -> dict:
         """The artifact. Shape is governed by the published JSON schema.
@@ -188,6 +233,17 @@ class Scorecard:
             "judge_model": self.judge_model,
             "judge_provider": self.judge_provider or None,
             "overall_pass": self.overall_pass,
+            "decision": self.decision,
+            "purpose": self.purpose,
+            "required_dimensions": self.required_dimensions or [dim.name for dim in self.dimensions],
+            "missing_dimensions": self.missing_dimensions,
+            "validation": self.validation,
+            "coverage": self.coverage,
+            "controls": self.controls,
+            "policy_sha256": self.policy_sha256,
+            "suite_sha256": self.suite_sha256,
+            "comparison": self.comparison,
+            "findings": self.findings,
             "dimensions": [dim.to_dict() for dim in self.dimensions],
         }
         # Only present when the dataset had repeated-trial cases, so existing
@@ -201,7 +257,7 @@ class Scorecard:
 
     # Status labels are shared verbatim by the Markdown and HTML renderers so the
     # two reports read identically. Glyphs are text (not emoji) to stay plain.
-    _DIM_STATUS = {True: "PASS", False: "FAIL", None: "SKIPPED"}
+    _DIM_STATUS = {True: "PASS", False: "FAIL", None: "INCOMPLETE"}
 
     @staticmethod
     def _display_name(name: str) -> str:
@@ -223,9 +279,14 @@ class Scorecard:
         lines: list[str] = []
         lines.append("# Assevra Reliability Scorecard")
         lines.append("")
-        verdict = "PASS" if self.overall_pass else "FAIL"
+        verdict = self.decision
         lines.append(f"**Overall: {verdict}**  ")
         lines.append(f"Measured with Assevra v{self.version}.")
+        lines.append(f"Purpose: {self.purpose}. Required scope: {', '.join(self.required_dimensions) or 'included dimensions'}.")
+        if self.findings:
+            lines.extend(["", "## What to fix and verify", ""])
+            for finding in self.findings:
+                lines.append(f"- **{finding['id']} — {finding['title']}**: {finding['suggested_action']} Verify: {finding['verification']}")
         lines.append("")
         lines.append(f"- Dataset: `{self.dataset or 'n/a'}`")
         lines.append(f"- Judge model: `{self.judge_model or 'none (judge dimensions skipped)'}`")
@@ -258,7 +319,7 @@ class Scorecard:
                 lines.append(f"_{d.notes}_")
                 lines.append("")
             for r in d.rows:
-                flag = "PASS" if r.passed else "FAIL"
+                flag = r.status
                 # `raw_score` means a judge verdict on a judged dimension and a
                 # measured quantity (dollars, milliseconds) on a deterministic
                 # one — label it for what it is rather than calling both "judge".
@@ -293,7 +354,7 @@ class Scorecard:
         """
         esc = html.escape
         overall = "pass" if self.overall_pass else "fail"
-        overall_label = "PASS" if self.overall_pass else "FAIL"
+        overall_label = self.decision
 
         scored = [d for d in self.dimensions if not d.skipped]
         n_scored = len(scored)
@@ -353,7 +414,7 @@ class Scorecard:
                 )
                 items.append(
                     f"<li><span class='dot dot-{dot}'></span>"
-                    f"<code>{esc(r.row_id)}</code>{extra} "
+                    f"<code>{esc(r.row_id)}</code> <span>{esc(r.status)}</span>{extra} "
                     f"<span class='detail'>{esc(r.detail)}</span></li>"
                 )
             if hidden > 0:
@@ -385,6 +446,7 @@ class Scorecard:
             version=esc(self.version),
             overall=overall,
             overall_label=overall_label,
+            findings_html="".join(f"<article><h4>{esc(f['id'])}: {esc(f['title'])}</h4><p>{esc(f['suggested_action'])}</p><p><strong>Verify:</strong> {esc(f['verification'])}</p></article>" for f in self.findings),
             dataset=dataset,
             judge=judge,
             n_passed=n_passed,
@@ -570,6 +632,7 @@ _HTML_TEMPLATE = """<!doctype html>
       </div>
 
       <h3 class="section">Summary</h3>
+      <section aria-label="Suggested fixes and verification">{findings_html}</section>
       <table>
         <thead><tr>
           <th>Dimension</th><th>Mode</th><th class="num">Score</th>

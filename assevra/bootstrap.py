@@ -147,6 +147,8 @@ def _load_csv(path: str) -> list[dict[str, str]]:
 
 def _looks_like_otel(records: list[Any]) -> bool:
     for rec in records[:5]:
+        if isinstance(rec, dict) and any(k.startswith("attributes.") for k in rec):
+            return True
         if isinstance(rec, dict) and ("resourceSpans" in rec or "scopeSpans" in rec):
             return True
         if isinstance(rec, dict) and rec.get("attributes") is not None and (
@@ -279,9 +281,12 @@ def _carry_signals(rec: dict, into: dict) -> dict:
     if normalized:
         into["tool_calls"] = normalized
 
-    for key in ("case_id", "id"):
-        if isinstance(rec.get(key), str) and key == "case_id":
-            into["case_id"] = rec[key]
+    for key in ("case_id", "id", "trace_id", "span_id", "parent_span_id", "trial_id", "tool_results", "observed_state", "trajectory", "_capture_error"):
+        if key in rec:
+            into[key] = rec[key]
+    for source, target in (("traceId", "trace_id"), ("spanId", "span_id"), ("parentSpanId", "parent_span_id"), ("context.trace_id", "trace_id"), ("context.span_id", "span_id")):
+        if source in rec:
+            into[target] = rec[source]
     if isinstance(rec.get("tags"), list):
         into["tags"] = [str(t) for t in rec["tags"]]
     return into
@@ -376,6 +381,11 @@ def _extract_openai(rec: dict) -> Optional[dict]:
     }
     # Usage lives on the response for OpenAI; tool calls live on the message.
     _carry_signals(rec, interaction)
+    if isinstance(messages, list):
+        interaction["trajectory"] = messages
+        interaction["tool_calls"] = [call for message in messages if isinstance(message, dict)
+                                     for call in _normalize_tool_calls(message.get("tool_calls"))]
+        interaction["tool_results"] = [message for message in messages if isinstance(message, dict) and message.get("role") == "tool"]
     if isinstance(response, dict):
         _carry_signals(response, interaction)
     choices = response.get("choices") if isinstance(response, dict) else None
@@ -384,7 +394,7 @@ def _extract_openai(rec: dict) -> Optional[dict]:
         if isinstance(message, dict):
             calls = _normalize_tool_calls(message.get("tool_calls"))
             if calls:
-                interaction["tool_calls"] = calls
+                interaction["tool_calls"] = interaction.get("tool_calls", []) + calls
     return interaction
 
 
@@ -444,7 +454,7 @@ def _span_attributes(span: dict) -> dict:
     attrs = span.get("attributes")
     if isinstance(attrs, dict):
         return attrs
-    flat: dict[str, Any] = {}
+    flat: dict[str, Any] = {k.removeprefix("attributes."): v for k, v in span.items() if k.startswith("attributes.")}
     if isinstance(attrs, list):
         for item in attrs:
             if not isinstance(item, dict):
@@ -469,8 +479,8 @@ def _span_attributes(span: dict) -> dict:
 def _extract_otel(span: dict) -> Optional[dict]:
     attrs = _span_attributes(span)
     # OpenInference (Phoenix / Arize) convention.
-    inp = attrs.get("input.value")
-    out = attrs.get("output.value")
+    inp = attrs.get("input.value", attrs.get("gen_ai.input.messages"))
+    out = attrs.get("output.value", attrs.get("gen_ai.output.messages"))
     # OpenLLMetry (Traceloop) convention: gen_ai.prompt.N.content / completion.N.
     if inp is None:
         prompts = [
@@ -486,7 +496,8 @@ def _extract_otel(span: dict) -> Optional[dict]:
         out = "\n".join(_as_text(c) for c in comps if c) or attrs.get("gen_ai.completion")
     if not inp and not out:
         return None
-    interaction = {"input": _as_text(inp), "agent_output": _as_text(out), "context": ""}
+    interaction = {"input": _as_text(inp), "agent_output": _as_text(out), "context": _as_text(attrs.get("context", attrs.get("retrieval.documents", "")))}
+    _carry_signals(span, interaction)
 
     # Spans carry usage and duration as attributes rather than as fields.
     usage = {}
@@ -546,7 +557,7 @@ def _draft_row(interaction: dict, dimension: str, index: int, id_prefix: str) ->
     # Signals the trace already carried travel with the row: they cost the human
     # nothing and they are what lets `assevra scan` score cost, latency and
     # tool calls without a single label being written.
-    for key in ("usage", "cost_usd", "latency_ms", "tool_calls", "case_id"):
+    for key in ("usage", "cost_usd", "latency_ms", "tool_calls", "case_id", "trace_id", "span_id", "parent_span_id", "trial_id", "tool_results", "observed_state", "trajectory", "_capture_error"):
         if key in interaction:
             row[key] = interaction[key]
 

@@ -83,9 +83,9 @@ inputs:
     required: false
     default: ""
   version:
-    description: "Assevra version specifier, e.g. '0.4.0'. Empty installs the latest release."
+    description: "Assevra version specifier, e.g. '0.6.0'. Defaults to this action release."
     required: false
-    default: ""
+    default: "0.6.0"
   skip-install:
     description: >-
       Assume `assevra` is already installed and on PATH. Set this when a job has
@@ -136,46 +136,67 @@ runs:
     - name: Install Assevra
       if: inputs.skip-install != 'true'
       shell: bash
+      env:
+        ASSEVRA_INPUT_EXTRAS: ${{ inputs.extras }}
+        ASSEVRA_INPUT_VERSION: ${{ inputs.version }}
       run: |
         python -m pip install --upgrade pip
         spec="assevra"
-        if [ -n "${{ inputs.version }}" ]; then spec="assevra==${{ inputs.version }}"; fi
-        if [ -n "${{ inputs.extras }}" ]; then spec="assevra[${{ inputs.extras }}]"; fi
-        if [ -n "${{ inputs.version }}" ] && [ -n "${{ inputs.extras }}" ]; then
-          spec="assevra[${{ inputs.extras }}]==${{ inputs.version }}"
+        if [ -n "$ASSEVRA_INPUT_VERSION" ]; then spec="assevra==$ASSEVRA_INPUT_VERSION"; fi
+        if [ -n "$ASSEVRA_INPUT_EXTRAS" ]; then spec="assevra[$ASSEVRA_INPUT_EXTRAS]"; fi
+        if [ -n "$ASSEVRA_INPUT_VERSION" ] && [ -n "$ASSEVRA_INPUT_EXTRAS" ]; then
+          spec="assevra[$ASSEVRA_INPUT_EXTRAS]==$ASSEVRA_INPUT_VERSION"
         fi
         echo "installing $spec"
         pip install "$spec"
         assevra --version
-
     - name: Validate the dataset before scoring it
       shell: bash
+      env:
+        ASSEVRA_INPUT_CONFIG: ${{ inputs.config }}
+        ASSEVRA_INPUT_DATASET: ${{ inputs.dataset }}
+        ASSEVRA_INPUT_STRICT: ${{ inputs.strict }}
       run: |
         args=()
-        [ -n "${{ inputs.dataset }}" ] && args+=("${{ inputs.dataset }}")
-        [ -n "${{ inputs.config }}" ] && args+=(--config "${{ inputs.config }}")
-        [ "${{ inputs.strict }}" = "true" ] && args+=(--strict)
+        [ -n "$ASSEVRA_INPUT_DATASET" ] && args+=("$ASSEVRA_INPUT_DATASET")
+        [ -n "$ASSEVRA_INPUT_CONFIG" ] && args+=(--config "$ASSEVRA_INPUT_CONFIG")
+        [ "$ASSEVRA_INPUT_STRICT" = "true" ] && args+=(--strict)
         assevra validate "${args[@]}"
-
     - name: Score the agent
       id: score
       shell: bash
+      env:
+        ASSEVRA_INPUT_ATTEST: ${{ inputs.attest }}
+        ASSEVRA_INPUT_BASELINE: ${{ inputs.baseline }}
+        ASSEVRA_INPUT_COMMENT: ${{ inputs.comment }}
+        ASSEVRA_INPUT_CONFIG: ${{ inputs.config }}
+        ASSEVRA_INPUT_DATASET: ${{ inputs.dataset }}
+        ASSEVRA_INPUT_FAIL_ON_REGRESSION: ${{ inputs.fail-on-regression }}
+        ASSEVRA_INPUT_GATE: ${{ inputs.gate }}
+        ASSEVRA_INPUT_HISTORY: ${{ inputs.history }}
+        ASSEVRA_INPUT_JUDGE_MODEL: ${{ inputs.judge-model }}
+        ASSEVRA_INPUT_JUDGE_PANEL: ${{ inputs.judge-panel }}
+        ASSEVRA_INPUT_JUDGE_PROVIDER: ${{ inputs.judge-provider }}
+        ASSEVRA_INPUT_LABEL: ${{ inputs.label }}
+        ASSEVRA_INPUT_OUT_DIR: ${{ inputs.out-dir }}
+        ASSEVRA_INPUT_SIGN_KEY: ${{ inputs.sign-key }}
+        ASSEVRA_INPUT_STRICT: ${{ inputs.strict }}
       run: |
-        args=(--out-dir "${{ inputs.out-dir }}")
-        [ -n "${{ inputs.dataset }}" ] && args+=(--dataset "${{ inputs.dataset }}")
-        [ -n "${{ inputs.config }}" ] && args+=(--config "${{ inputs.config }}")
-        [ -n "${{ inputs.history }}" ] && args+=(--history "${{ inputs.history }}")
-        [ -n "${{ inputs.label }}" ] && args+=(--label "${{ inputs.label }}")
-        [ -n "${{ inputs.baseline }}" ] && args+=(--baseline "${{ inputs.baseline }}")
-        [ -n "${{ inputs.judge-model }}" ] && args+=(--judge-model "${{ inputs.judge-model }}")
-        [ -n "${{ inputs.judge-panel }}" ] && args+=(--judge-panel "${{ inputs.judge-panel }}")
-        [ -n "${{ inputs.sign-key }}" ] && args+=(--sign "${{ inputs.sign-key }}")
-        [ "${{ inputs.judge-provider }}" != "auto" ] && args+=(--judge-provider "${{ inputs.judge-provider }}")
-        [ "${{ inputs.gate }}" = "true" ] && args+=(--gate)
-        [ "${{ inputs.strict }}" = "true" ] && args+=(--strict)
-        [ "${{ inputs.attest }}" = "true" ] && args+=(--attest)
-        [ "${{ inputs.fail-on-regression }}" = "true" ] && args+=(--fail-on-regression)
-        [ "${{ inputs.comment }}" != "true" ] && unset GITHUB_STEP_SUMMARY
+        args=(--out-dir "$ASSEVRA_INPUT_OUT_DIR")
+        [ -n "$ASSEVRA_INPUT_DATASET" ] && args+=(--dataset "$ASSEVRA_INPUT_DATASET")
+        [ -n "$ASSEVRA_INPUT_CONFIG" ] && args+=(--config "$ASSEVRA_INPUT_CONFIG")
+        [ -n "$ASSEVRA_INPUT_HISTORY" ] && args+=(--history "$ASSEVRA_INPUT_HISTORY")
+        [ -n "$ASSEVRA_INPUT_LABEL" ] && args+=(--label "$ASSEVRA_INPUT_LABEL")
+        [ -n "$ASSEVRA_INPUT_BASELINE" ] && args+=(--baseline "$ASSEVRA_INPUT_BASELINE")
+        [ -n "$ASSEVRA_INPUT_JUDGE_MODEL" ] && args+=(--judge-model "$ASSEVRA_INPUT_JUDGE_MODEL")
+        [ -n "$ASSEVRA_INPUT_JUDGE_PANEL" ] && args+=(--judge-panel "$ASSEVRA_INPUT_JUDGE_PANEL")
+        [ -n "$ASSEVRA_INPUT_SIGN_KEY" ] && args+=(--sign "$ASSEVRA_INPUT_SIGN_KEY")
+        [ "$ASSEVRA_INPUT_JUDGE_PROVIDER" != "auto" ] && args+=(--judge-provider "$ASSEVRA_INPUT_JUDGE_PROVIDER")
+        [ "$ASSEVRA_INPUT_GATE" = "true" ] && args+=(--gate)
+        [ "$ASSEVRA_INPUT_STRICT" = "true" ] && args+=(--strict)
+        [ "$ASSEVRA_INPUT_ATTEST" = "true" ] && args+=(--attest)
+        [ "$ASSEVRA_INPUT_FAIL_ON_REGRESSION" = "true" ] && args+=(--fail-on-regression)
+        [ "$ASSEVRA_INPUT_COMMENT" != "true" ] && unset GITHUB_STEP_SUMMARY
 
         # Capture the exit code so the outputs and the artifact are still
         # produced on a failing gate — a red build is exactly when someone needs
@@ -185,9 +206,9 @@ runs:
         code=$?
         set -e
 
-        card="${{ inputs.out-dir }}/scorecard.json"
+        card="$ASSEVRA_INPUT_OUT_DIR/scorecard.json"
         echo "scorecard=$card" >> "$GITHUB_OUTPUT"
-        echo "html=${{ inputs.out-dir }}/scorecard.html" >> "$GITHUB_OUTPUT"
+        echo "html=$ASSEVRA_INPUT_OUT_DIR/scorecard.html" >> "$GITHUB_OUTPUT"
         if [ -f "$card" ]; then
           python - "$card" >> "$GITHUB_OUTPUT" <<'PY'
         import json, sys
@@ -205,7 +226,6 @@ runs:
           echo "summary=no scorecard produced" >> "$GITHUB_OUTPUT"
         fi
         exit $code
-
     - name: Upload the scorecard
       if: always() && inputs.upload-artifact == 'true'
       uses: actions/upload-artifact@v4

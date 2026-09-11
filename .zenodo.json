@@ -1,11 +1,13 @@
 {
   "title": "Assevra: A Reliability Scorecard for LLM Agents",
-  "description": "Assevra turns agent test runs into signed, statistically defensible scorecards that gate every release. It scores a large language model (LLM) agent on nine dimensions - grounding, safety/refusal, PII leakage, task completion, tool-call validation, action correctness, prompt-injection resistance, cost, and latency - each against a stated threshold with a 95% Wilson confidence interval reported next to its sample size, and issues a reproducible artifact as Markdown, JSON, and a self-contained HTML report. Seven of the nine dimensions are deterministic and run entirely offline; LLM-as-a-judge dimensions use a pinned, hashed rubric, require calibration against human labels (Cohen's kappa) before their scores are trusted, and are skipped - never counted as passing - when unavailable. Scorecards can be signed with Ed25519 and mapped to the control families of the EU AI Act, NIST AI RMF, ISO/IEC 42001, and the OWASP Top 10 for LLM Applications. The artifact JSON is governed by published, independently versioned schemas. This is the reference implementation of the Assevra Reliability Scorecard methodology.",
+  "description": "Assevra is an MIT-licensed framework for evaluating captured agent runs. Version 0.6 adds explicit release decisions, actionable findings, required coverage, evaluator-error handling, full tool-schema validation, observed final-state assertions, and an executable synthetic refund workflow demonstrating failure, repair, and verification. Dimension pass rates carry sample sizes and Wilson confidence intervals. Portable schema-v2 HTML and JSON reports support optional Ed25519 signing of canonical JSON. Model judging requires user calibration against representative human labels; scans and mock self-tests do not constitute passing release evidence. Integration recipes and trace adapters are provided for common agent frameworks and observability exports.",
   "upload_type": "software",
   "access_right": "open",
   "license": "MIT",
   "creators": [
-    { "name": "Divi, Veera Ravindra" }
+    {
+      "name": "Divi, Veera Ravindra"
+    }
   ],
   "keywords": [
     "large language models",
@@ -21,5 +23,7 @@
     "continuous integration",
     "AI governance",
     "software engineering"
-  ]
+  ],
+  "version": "0.6.0",
+  "publication_date": "2026-09-11"
 }

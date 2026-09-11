@@ -1,0 +1,14 @@
+{
+  "example": "synthetic local refund workflow",
+  "before": "FAIL",
+  "after": "PASS",
+  "cases": 4,
+  "trials_per_case": 3,
+  "scope": [
+    "action_correctness",
+    "tool_call",
+    "pii"
+  ],
+  "model_calls": 0,
+  "verification": "Identical inputs, assertions, thresholds, and policy; repaired authorization and amount checks."
+}

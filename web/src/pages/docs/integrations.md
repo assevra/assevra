@@ -5,61 +5,25 @@ description: One command per tool you already run — OpenTelemetry, LangGraph, 
 eyebrow: Using it
 ---
 
-Assevra deliberately does not execute your agent. It scores outputs you have
-already captured — so the only thing between a team and a scorecard is getting
-their existing traces into Assevra's shape.
+Assevra provides a Python SDK and recorder, serialized trace adapters, and capture/export recipes. `capture` can execute a command you supply. The integrations below are not vendor partnerships.
 
-Every hour spent writing that glue is an hour not spent evaluating, so the glue
-ships with the tool:
+| Stack                | Available interface                                       |
+| -------------------- | --------------------------------------------------------- |
+| Python               | SDK and recorder                                          |
+| LangGraph            | Full-message-history capture recipe                       |
+| OpenAI Agents        | Run-item and function-call capture recipe                 |
+| OTel / Phoenix       | Supported serialized OTLP/OpenInference adapter           |
+| Langfuse             | Paginated observation export recipe                       |
+| MCP tool definitions | JSON Schema contract import; not a live server connection |
+
+Local fixtures test serialization and normalization. SDK recipes are based on vendor documentation; run a smoke test against your own installed SDK and hosted service. Preserve context, tool results, case identity, and observed final state where relevant. Spans alone do not establish a complete agent trial: select the appropriate root run or export an explicitly assembled trajectory.
 
 ```bash
 assevra integrate --list
 assevra integrate langgraph
-assevra integrate langfuse --out INTEGRATION.md
 ```
-
-Each guide prints the capture snippet, the export command, and the exact
-`bootstrap` invocation for that format.
-
-| Target          | Format      | Notes                                             |
-| --------------- | ----------- | ------------------------------------------------- |
-| `otel`          | `otel`      | OpenTelemetry / OpenInference / OpenLLMetry spans |
-| `langgraph`     | `generic`   | Run state and message history                     |
-| `langfuse`      | `generic`   | Observations exported as JSON                     |
-| `phoenix`       | `otel`      | Arize Phoenix spans (OpenInference)               |
-| `openai-agents` | `openai`    | The Agents SDK trace export                       |
-| `anthropic`     | `anthropic` | Messages API logs                                 |
-
-## OpenTelemetry
-
-If your agent is already instrumented, there is nothing to add. Assevra reads
-OTLP exports directly — both the OpenInference convention (`input.value` /
-`output.value`) and OpenLLMetry (`gen_ai.prompt.*` / `gen_ai.completion.*`), in
-nested `resourceSpans` form or as a flat list of spans.
-
-```python
-from opentelemetry import trace
-
-tracer = trace.get_tracer("my-agent")
-with tracer.start_as_current_span("agent.turn") as span:
-    span.set_attribute("input.value", user_message)
-    output = agent.run(user_message)
-    span.set_attribute("output.value", output)
-```
-
-```bash
-assevra bootstrap --from spans.json --format otel --out evals/agent.jsonl
-```
-
-Spans carry no answer key — nothing in a trace knows whether the agent _should_
-have refused. That judgment is the part only you can supply, and it is exactly
-what `bootstrap` leaves blank with a per-row hint.
 
 ## LangGraph
-
-LangGraph state is a dict, so it maps cleanly onto rows: the last human message
-is the input, the last AI message the output, and the tool calls come across
-intact for the `tool_call` and `action_correctness` dimensions.
 
 ```python
 import json
@@ -71,9 +35,11 @@ for example_input in inputs:
     records.append({
         "input": example_input,
         "agent_output": final.content,
+        # Carry the calls through: they feed `tool_call` and `action_correctness`.
         "tool_calls": [
             {"name": c["name"], "arguments": c.get("args", {})}
-            for c in getattr(final, "tool_calls", []) or []
+            for message in state["messages"]
+            for c in getattr(message, "tool_calls", []) or []
         ],
     })
 
@@ -82,59 +48,32 @@ with open("traces.jsonl", "w") as fh:
         fh.write(json.dumps(record) + "\n")
 ```
 
-Running the same input several times and giving those runs a shared `case_id`
-unlocks pass^k and the flaky-case report — worth doing for any graph with
-branching, where run-to-run variance is the whole risk.
-
-## Langfuse
-
-Langfuse observations export with `input` and `output` fields, which are already
-two of Assevra's field aliases — the generic adapter reads them with no mapping.
-
-```python
-import json
-from langfuse import Langfuse
-
-client = Langfuse()
-page = client.api.observations.get_many(type="GENERATION", limit=200)
-with open("traces.json", "w") as fh:
-    json.dump([o.dict() for o in page.data], fh)
+```bash
+# The capture step above already wrote traces.jsonl.
+mv traces.jsonl traces.json
 ```
 
 ```bash
-assevra bootstrap --from traces.json --out evals/agent.jsonl
-```
-
-If your project nests the prompt under a custom key, map it explicitly:
-`--input-field <key> --output-field <key>`.
-
-## Arize Phoenix
-
-Phoenix stores OpenInference spans, which the `otel` adapter reads natively.
-
-```python
-import phoenix as px
-
-spans = px.Client().get_spans_dataframe()
-spans.to_json("traces.json", orient="records")
-```
-
-```bash
-assevra bootstrap --from traces.json --format otel --out evals/agent.jsonl
+assevra bootstrap --from traces.json --format generic --out evals/agent.jsonl
 ```
 
 ## OpenAI Agents SDK
 
 ```python
 import json
-from agents import Runner
+from agents import Agent, Runner
 
 records = []
 for prompt in prompts:
     result = await Runner.run(agent, prompt)
+    items = result.to_input_list()
     records.append({
-        "messages": [{"role": "user", "content": prompt}],
-        "choices": [{"message": {"role": "assistant", "content": result.final_output}}],
+        "input": prompt,
+        "agent_output": str(result.final_output),
+        "trajectory": items,
+        "tool_calls": [{"name": item["name"], "arguments": item.get("arguments", "{}")}
+                       for item in items if item.get("type") == "function_call"],
+        "tool_results": [item for item in items if item.get("type") == "function_call_output"],
     })
 
 with open("traces.json", "w") as fh:
@@ -142,56 +81,129 @@ with open("traces.json", "w") as fh:
 ```
 
 ```bash
-assevra bootstrap --from traces.json --format openai --out evals/agent.jsonl
+# The capture step above already wrote traces.json.
+```
+
+```bash
+assevra bootstrap --from traces.json --format generic --out evals/agent.jsonl
+```
+
+## Arize Phoenix
+
+```python
+# Phoenix instruments through OpenInference; if traces appear in the Phoenix UI,
+# they are already in the shape Assevra reads.
+import phoenix as px
+px.launch_app()
+```
+
+```python
+import json
+from phoenix.client import Client
+
+spans = Client().spans.get_spans_dataframe()
+spans.to_json("traces.json", orient="records")
+```
+
+```bash
+assevra bootstrap --from traces.json --format otel --out evals/agent.jsonl
+```
+
+## Langfuse
+
+```python
+# Langfuse's decorators or SDK already record every generation. Nothing to add.
+from langfuse import observe
+
+@observe()
+def handle(message: str) -> str:
+    return agent.run(message)
+```
+
+```python
+# Export the observations you want to evaluate.
+import json
+from langfuse import Langfuse
+
+client = Langfuse()
+records, page_number = [], 1
+while True:
+    page = client.api.observations.get_many(type="GENERATION", limit=100, page=page_number)
+    records.extend(json.loads(o.json()) for o in page.data)
+    if len(page.data) < 100:
+        break
+    page_number += 1
+with open("traces.json", "w") as fh:
+    json.dump(records, fh)
+```
+
+```bash
+assevra bootstrap --from traces.json --format generic --out evals/agent.jsonl
+```
+
+## OpenTelemetry
+
+```python
+# Any OTel-instrumented LLM app already emits what Assevra needs. If you are
+# starting from scratch, record the two attributes that matter:
+from opentelemetry import trace
+
+tracer = trace.get_tracer("my-agent")
+with tracer.start_as_current_span("agent.turn") as span:
+    span.set_attribute("input.value", user_message)
+    output = agent.run(user_message)
+    span.set_attribute("output.value", output)
+```
+
+```bash
+# Point your collector at a file exporter, or dump spans you already store:
+# any OTLP JSON export works, including a raw `resourceSpans` document.
+cp $OTEL_EXPORT_DIR/spans.json traces.json
+```
+
+```bash
+assevra bootstrap --from traces.json --format otel --out evals/agent.jsonl
 ```
 
 ## Anthropic Messages API
 
-Log the request and the response and you have a dataset draft. The `anthropic`
-adapter reads user/assistant messages and the system prompt — which is usually
-_the grounding context itself_.
-
 ```python
-message = client.messages.create(
-    model="claude-opus-4-8",
-    max_tokens=1024,
-    system=policy_text,
-    messages=[{"role": "user", "content": prompt}],
-)
+import json
 
-record = {
-    "model": message.model,
-    "system": policy_text,
-    "messages": [
-        {"role": "user", "content": prompt},
-        {"role": "assistant", "content": message.content[0].text},
-    ],
-    "usage": {
-        "input_tokens": message.usage.input_tokens,
-        "output_tokens": message.usage.output_tokens,
-    },
-}
+log = []
+for prompt in prompts:
+    message = client.messages.create(
+        model="claude-opus-4-8",
+        max_tokens=1024,
+        system=policy_text,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    log.append({
+        "model": message.model,
+        "system": policy_text,
+        "messages": [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": message.content[0].text},
+        ],
+        # Cost and latency become gateable dimensions once you record them.
+        "usage": {
+            "input_tokens": message.usage.input_tokens,
+            "output_tokens": message.usage.output_tokens,
+        },
+    })
+
+with open("traces.json", "w") as fh:
+    json.dump(log, fh)
 ```
-
-Recording `usage` is what turns the `cost` dimension on: set `budgets.price` in
-`.assevra.yml` and Assevra prices each row and gates on the budget.
-
-## CSV and anything else
 
 ```bash
-assevra bootstrap --from rows.csv --input-field question --output-field answer
+# The capture step above already wrote traces.json.
 ```
 
-Column and field names are matched against a list of common aliases
-(`prompt`/`question`/`query`, `response`/`completion`/`answer`,
-`context`/`reference`/`retrieved_context`), or mapped explicitly.
+```bash
+assevra bootstrap --from traces.json --format anthropic --out evals/agent.jsonl
+```
 
-For a house format worth reusing, register an adapter through the
-[SDK](/docs/sdk#extending) and `--format your-name` will find it.
+Review the drafted rows and add acceptance criteria before running a release gate. The generic API export may include sensitive fields; retain only the evidence your evaluation needs.
 
-## Judge providers
-
-Separate from trace formats: which vendor serves the judged dimensions. Anthropic,
-OpenAI, Azure, Bedrock, Gemini, any OpenAI-compatible local endpoint (Ollama,
-vLLM, LM Studio — with **no third-party package**), or the deterministic offline
-`mock`. See [Configuration → judge](/docs/configuration#judge).
+Vendor references: [Langfuse query SDK](https://langfuse.com/docs/api-and-data-platform/features/query-via-sdk), [Phoenix span exports](https://arize.com/docs/phoenix/tracing/how-to-tracing/importing-and-exporting-traces/extract-data-from-spans), [OpenAI Agents run results](https://openai.github.io/openai-agents-python/results/). Langfuse deployments may use different observation API versions; this recipe uses the paginated v1 compatibility API.

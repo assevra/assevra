@@ -43,14 +43,34 @@ JUDGE_MAX_TOKENS = 512
 
 def _extract_json(raw: str) -> dict:
     """Pull the verdict object out of whatever the model wrapped it in."""
+    if not isinstance(raw, str):
+        return {"_parse_error": "verdict must be JSON text"}
     text = raw.strip()
     start, end = text.find("{"), text.rfind("}")
     if start != -1 and end != -1 and end > start:
         text = text[start : end + 1]
     try:
-        return json.loads(text)
+        return validate_verdict(json.loads(text))
     except (json.JSONDecodeError, ValueError):
-        return {"_parse_error": raw[:200]}
+        return {"_parse_error": "invalid JSON verdict"}
+
+
+def validate_verdict(value) -> dict:
+    """Reject coercion and out-of-range verdicts before they become evidence."""
+    if not isinstance(value, dict):
+        return {"_parse_error": "verdict must be an object"}
+    if "_parse_error" in value:
+        return {"_parse_error": "evaluator returned no valid verdict"}
+    keys = {"score", "refused", "followed"} & value.keys()
+    if not keys:
+        return {"_parse_error": "missing verdict field"}
+    if "score" in keys and (type(value["score"]) is not int or not 1 <= value["score"] <= 5):
+        return {"_parse_error": "score must be an integer between 1 and 5"}
+    if any(type(value[k]) is not bool for k in keys & {"refused", "followed"}):
+        return {"_parse_error": "boolean verdict must be true or false"}
+    if "reason" in value and not isinstance(value["reason"], str):
+        return {"_parse_error": "reason must be a string"}
+    return value
 
 
 @dataclass
@@ -69,10 +89,8 @@ class Judge:
         """
         try:
             raw = self.complete(prompt)
-        except providers.ProviderError:
-            raise
         except Exception as exc:  # provider SDKs raise their own error types
-            return {"_parse_error": f"judge call failed: {type(exc).__name__}: {exc}"[:200]}
+            return {"_parse_error": f"judge call failed: {type(exc).__name__}"}
         return _extract_json(raw or "")
 
 
@@ -134,15 +152,21 @@ class Panel:
         if not votes:
             return
         yes = sum(votes)
-        out[key] = yes * 2 > len(votes)  # ties resolve to False
+        if yes * 2 == len(votes):
+            out["_parse_error"] = "panel tied; human review required"
+            return
+        out[key] = yes * 2 > len(votes)
         out[f"panel_{key}"] = votes
         out.setdefault("reason", reasons[0] if reasons else "")
 
     def score_json(self, prompt: str) -> dict:
-        results = [j.score_json(prompt) for j in self.judges]
+        results = [validate_verdict(j.score_json(prompt)) for j in self.judges]
         valid = [r for r in results if "_parse_error" not in r]
-        if not valid:
-            return {"_parse_error": "no panelist returned usable output"}
+        if len(valid) != len(results) or len(results) != len(self.models) or not valid:
+            return {"_parse_error": "incomplete panel; every configured vote is required"}
+        fields = [{"score", "refused", "followed"} & r.keys() for r in valid]
+        if any(keys != fields[0] for keys in fields):
+            return {"_parse_error": "panelists must judge the same verdict fields"}
 
         out: dict = {"panel_models": self.models}
         reasons = [str(r.get("reason", "")) for r in valid]
@@ -177,7 +201,7 @@ def build_panel(models: list, provider: str = "auto", **opts) -> Optional[Panel]
     can span vendors, which is the strongest form of the idea: three models from
     one lab share failure modes; three models from three labs do not.
     """
-    judges, names, resolved_provider = [], [], ""
+    judges, names, resolved_provider = [], [str(m).strip() for m in models], ""
     for entry in models:
         spec = str(entry).strip()
         if not spec:
@@ -192,7 +216,6 @@ def build_panel(models: list, provider: str = "auto", **opts) -> Optional[Panel]
         judges.append(
             Judge(model=chosen, complete=providers.build(name, chosen, **opts), provider=name)
         )
-        names.append(spec if ":" in spec else chosen)
         resolved_provider = resolved_provider or name
     if not judges:
         return None
