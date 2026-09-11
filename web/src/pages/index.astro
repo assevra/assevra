@@ -155,7 +155,10 @@ const integrations = [
     <main id="main">
       <section class="hero">
         <div>
-          <p class="eyebrow">Agent evaluation. From failure to verified fix.</p>
+          <p class="eyebrow hero-eyebrow">
+            Agent evaluation. From <span class="failure-label">FAILURE</span>{' '}
+            <span aria-label="to">→</span> verified <strong class="fix-label">FIX</strong>.
+          </p>
           <h1>
             Find agent failures<br /><span class="headline-accent">before your users do.</span>
           </h1>
@@ -887,6 +890,16 @@ const integrations = [
     color: #6255cf;
     font-weight: 650;
     margin: 0 0 18px;
+  }
+  .hero-eyebrow {
+    text-transform: none;
+  }
+  .failure-label {
+    color: #b42318;
+  }
+  .fix-label {
+    color: #16703b;
+    font-weight: 800;
   }
   h1 {
     font-size: clamp(38px, 4.1vw, 55px);
