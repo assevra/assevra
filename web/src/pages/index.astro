@@ -1,6 +1,97 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 const GH = 'https://github.com/assevra/assevra';
+const dimensions = [
+  [
+    'grounding',
+    'Grounding',
+    'Answers',
+    'Does the answer follow from the sources?',
+    'Compare claims with captured context using a model judge.',
+  ],
+  [
+    'safety',
+    'Safety & refusal',
+    'Answers',
+    'Does it refuse the right requests?',
+    'Check both required refusals and permitted responses against labels.',
+  ],
+  [
+    'pii',
+    'Sensitive data',
+    'Answers',
+    'Did private information escape?',
+    'Detect supported sensitive patterns, with optional Presidio coverage.',
+  ],
+  [
+    'task_completion',
+    'Task completion',
+    'Answers',
+    'Did the answer include what was required?',
+    'Check explicit required strings; use outcome assertions for business state.',
+  ],
+  [
+    'tool_call',
+    'Tool contracts',
+    'Actions',
+    'Were the arguments valid and permitted?',
+    'Validate full tool schemas, allowed calls, and expected arguments.',
+  ],
+  [
+    'action_correctness',
+    'Actions & outcomes',
+    'Actions',
+    'Did the workflow do the right thing?',
+    'Assert action order, forbidden side effects, and observed final state.',
+  ],
+  [
+    'injection',
+    'Prompt injection',
+    'Actions',
+    'Did untrusted content redirect the agent?',
+    'Evaluate labeled injection cases with canaries or a configured judge.',
+  ],
+  [
+    'cost',
+    'Cost budgets',
+    'Operations',
+    'Did the run stay within budget?',
+    'Use recorded cost or token usage with your explicit price table.',
+  ],
+  [
+    'latency',
+    'Latency budgets',
+    'Operations',
+    'Did the workflow finish in time?',
+    'Compare recorded duration with your budget and inspect timing summaries.',
+  ],
+];
+const scenarios = [
+  {
+    title: 'Customer support & RAG',
+    label: 'Trust the answer',
+    body: 'Catch unsupported policy claims, leaked identifiers, and instructions hidden in retrieved content.',
+    checks: 'Grounding · PII · Injection',
+    next: 'Review sources, repair the retrieval or response policy, then rerun labeled cases.',
+    href: '/docs/dimensions',
+  },
+  {
+    title: 'Refunds & business workflows',
+    label: 'Trust the action',
+    body: 'Catch unauthorized refunds and incorrect final state—even when the tool call is well-formed.',
+    checks: 'Actions · Tool contracts · Final state',
+    next: 'Move authorization before the side effect and verify the resulting order state.',
+    href: '/examples/refund',
+  },
+  {
+    title: 'Agent pipelines in production',
+    label: 'Control the release',
+    body: 'Check captured runs against cost, latency, and correctness requirements before shipping a change.',
+    checks: 'Budgets · Required coverage · Regression checks',
+    next: 'Compare the full suite against a compatible, reviewed baseline in CI.',
+    href: '/docs/ci',
+  },
+];
 const benefits = [
   ['Connect your existing runs.', 'Import traces or capture your own agent command.'],
   ['Know what to fix next.', 'Get case-level findings, suggested actions, and verification steps.'],
@@ -51,9 +142,9 @@ const integrations = [
     <header class="home-header">
       <a href="/" class="wordmark" aria-label="Assevra home">assevra<span>.</span></a>
       <nav aria-label="Main navigation">
-        <a href="#workflow">How it works</a><a href="#integrations">Integrations</a><a href="/docs"
-          >Docs</a
-        ><a href={GH}>GitHub ↗</a>
+        <a href="#dimensions">Capabilities</a><a href="#workflow">How it works</a><a
+          href="#integrations">Integrations</a
+        ><a href="/docs">Docs</a><a href={GH}>GitHub ↗</a>
       </nav>
     </header>
     <main id="main">
@@ -74,7 +165,9 @@ const integrations = [
               ))
             }
           </ul>
-          <a class="button primary" href="#start">Run the fix-and-verify example <span>↓</span></a>
+          <a class="button primary" href="/examples/refund"
+            >Explore a failure and its fix <span>→</span></a
+          >
           <a class="text-link" href="/try">Try a browser scan ↗</a>
           <p class="fine">
             No account required. Deterministic checks run locally after installation.
@@ -117,6 +210,91 @@ const integrations = [
             </p>
           </div>
         </div>
+      </section>
+      <div class="stack-band" aria-label="Supported integration paths">
+        <span>Fits your existing stack</span><strong>LangGraph</strong><strong>OpenAI Agents</strong
+        ><strong>OpenTelemetry</strong><strong>Langfuse</strong><strong>Phoenix</strong><strong
+          >MCP tool schemas</strong
+        ><a href="#integrations">See integration types ↓</a>
+      </div>
+      <section class="section" id="use-cases">
+        <p class="eyebrow">Start with the failure your team cannot afford</p><h2>
+          Built around the work your agent does.
+        </h2><div class="scenario-grid">
+          {
+            scenarios.map((item) => (
+              <article class="scenario-card">
+                <>
+                  <span class="eyebrow">{item.label}</span>
+                  <h3>{item.title}</h3>
+                  <p>{item.body}</p>
+                  <div class="check-label">{item.checks}</div>
+                  <p class="scenario-next">
+                    <strong>Then act:</strong> {item.next}
+                  </p>
+                  <a href={item.href}>
+                    {item.href === '/examples/refund'
+                      ? 'Explore the refund walkthrough'
+                      : 'Explore the evaluation approach'}{' '}
+                    →
+                  </a>
+                </>
+              </article>
+            ))
+          }
+        </div>
+      </section>
+      <section class="section capability-section" id="dimensions">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Nine dimensions. One inspectable decision.</p><h2>
+              Look beyond the final answer.
+            </h2>
+          </div><p>
+            Inspect what the agent said, what it did, and what the run cost. Choose the checks your
+            release actually requires.
+          </p>
+        </div><div
+          class="dimension-filters"
+          role="group"
+          aria-label="Filter evaluation capabilities"
+        >
+          {
+            ['All', 'Answers', 'Actions', 'Operations'].map((category) => (
+              <button data-category={category} aria-pressed={category === 'All' ? 'true' : 'false'}>
+                {category}
+              </button>
+            ))
+          }
+        </div><p class="filter-summary" id="filter-summary" aria-live="polite">
+          Showing all 9 dimensions
+        </p><div class="dimension-grid">
+          {
+            dimensions.map(([id, name, group, question, detail], index) => (
+              <article class="dimension-card" data-dimension-group={group}>
+                <>
+                  <div class="dimension-meta">
+                    <>
+                      <span>{String(index + 1).padStart(2, '0')}</span>
+                      <span>{group}</span>
+                    </>
+                  </div>
+                  <h3>{name}</h3>
+                  <p class="dimension-question">{question}</p>
+                  <p>{detail}</p>
+                  <a href="/docs/dimensions" aria-label={`Read about ${name}`}>
+                    Explore <span aria-hidden="true">→</span>
+                  </a>
+                  <span class="dimension-id">{id}</span>
+                </>
+              </article>
+            ))
+          }
+        </div><p class="fine">
+          Model judgments require calibration against representative human labels. Detector and rule
+          coverage depend on the configuration; a passing fixture does not establish general
+          reliability.
+        </p>
       </section>
       <section class="workflow section" id="workflow">
         <p class="eyebrow">A scorecard should start the next step.</p><h2>
@@ -170,7 +348,7 @@ python -m assevra.reference --out-dir reference-output</code></pre><div
           >
             <span>before → FAIL</span><span>after → PASS</span>
           </div><p>Open <code>reference-output/after/scorecard.html</code></p><a
-            href={`${GH}/blob/main/assevra/reference.py`}>Read the complete example source ↗</a
+            href="/examples/refund">Explore the complete walkthrough →</a
           >
         </div>
       </section>
@@ -234,6 +412,76 @@ python -m assevra.reference --out-dir reference-output</code></pre><div
           </p><a href="/docs">Read the documentation →</a>
         </article>
       </section>
+      <section class="section evidence-depth">
+        <p class="eyebrow">More than a single score</p><h2>
+          Evidence that travels with the release.
+        </h2><div class="evidence-grid">
+          <article>
+            <span class="evidence-symbol" aria-hidden="true">↔</span><h3>
+              Understand uncertainty
+            </h3><p>
+              See sample sizes and Wilson intervals alongside dimension pass rates. Use repeated
+              trials to inspect consistency and pass^k.
+            </p><a href="/docs/methodology">Measurement methodology →</a>
+          </article><article>
+            <span class="evidence-symbol" aria-hidden="true">≋</span><h3>Choose your judge</h3><p>
+              Use Anthropic, OpenAI, Azure, Bedrock, Gemini, or a compatible local endpoint. Panel
+              disagreement remains visible.
+            </p><a href="/docs/calibration">Judge calibration →</a>
+          </article><article>
+            <span class="evidence-symbol" aria-hidden="true">✓</span><h3>Verify the artifact</h3><p>
+              Sign canonical JSON with Ed25519. Share the portable report and verify it against a
+              trusted public key.
+            </p><a href="/docs/security">Signing and data flow →</a>
+          </article><article>
+            <span class="evidence-symbol" aria-hidden="true">▤</span><h3>
+              Organize review evidence
+            </h3><p>
+              Generate an Agent Card with indicative mappings to NIST AI RMF, EU AI Act, ISO/IEC
+              42001, and OWASP control families.
+            </p><a href="/docs/governance">Explore Agent Cards →</a>
+          </article>
+        </div><p class="fine">
+          Governance mappings help reviewers locate evidence; they are not a compliance
+          determination or certification.
+        </p>
+      </section>
+      <section class="section faq-section">
+        <div>
+          <p class="eyebrow">Before you connect your agent</p><h2>A few practical answers.</h2><a
+            href="/docs/faq">Read the full FAQ →</a
+          >
+        </div><div class="faq-list">
+          <details>
+            <summary>Do I need to replace my tracing platform?</summary><p>
+              No. Export supported traces or use the Python SDK and recorder. Assevra adds
+              evaluation and release evidence around the runs you already capture.
+            </p>
+          </details><details>
+            <summary>What should I do when a case fails?</summary><p>
+              Inspect the case, trace, and acceptance criteria. Review the suggested action, change
+              the agent, execute it again, and rerun the complete declared suite. <a
+                href="/examples/refund">Follow the guided example.</a
+              >
+            </p>
+          </details><details>
+            <summary>Can I use Assevra without sending data to a cloud judge?</summary><p>
+              Deterministic checks run locally after installation. A configured local model endpoint
+              can handle model judgments. Cloud judges receive the fields in their rubric prompts.
+            </p>
+          </details><details>
+            <summary>Can a partial scan approve a release?</summary><p>
+              No. Scans are TRIAGE and mock runs are SELF_TEST. A release PASS requires completed
+              evidence for every included and required dimension.
+            </p>
+          </details><details>
+            <summary>Is Assevra open source?</summary><p>
+              Yes, under the MIT license. The code, methodology, versioned schemas, and release
+              archives are public. You can extend scorers and reporters through the Python SDK.
+            </p>
+          </details>
+        </div>
+      </section>
       <section class="closing">
         <h2>Make the next agent release easier to trust.</h2><a class="button primary" href="#start"
           >Run the example ↑</a
@@ -252,6 +500,25 @@ python -m assevra.reference --out-dir reference-output</code></pre><div
   </div>
 </BaseLayout>
 <script>
+  document.querySelectorAll<HTMLButtonElement>('[data-category]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const category = button.dataset.category;
+      let visible = 0;
+      document
+        .querySelectorAll<HTMLButtonElement>('[data-category]')
+        .forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+      document.querySelectorAll<HTMLElement>('[data-dimension-group]').forEach((card) => {
+        card.hidden = category !== 'All' && card.dataset.dimensionGroup !== category;
+        if (!card.hidden) visible++;
+      });
+      const summary = document.getElementById('filter-summary');
+      if (summary)
+        summary.textContent =
+          category === 'All'
+            ? 'Showing all 9 dimensions'
+            : `Showing ${visible} ${category?.toLowerCase()} dimensions`;
+    });
+  });
   const states = {
     before: {
       status: 'FAIL · ACTION CORRECTNESS',
@@ -319,6 +586,241 @@ python -m assevra.reference --out-dir reference-output</code></pre><div
   });
 </script>
 <style>
+  .stack-band {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 20px;
+    padding: 23px 0;
+    border-top: 1px solid #dedde3;
+    font-size: 12px;
+    color: #56556a;
+  }
+  .stack-band > span {
+    color: #787782;
+    font-size: 11px;
+  }
+  .stack-band > a {
+    color: #594ac4;
+    margin-left: auto;
+  }
+  .scenario-grid,
+  .dimension-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    margin-top: 28px;
+  }
+  .scenario-card {
+    border: 1px solid #dddbe8;
+    border-radius: 8px;
+    padding: 26px;
+    background: linear-gradient(145deg, #fff, #f4f2fb);
+    display: flex;
+    flex-direction: column;
+  }
+  .scenario-card h3 {
+    font-size: 21px;
+    margin: 12px 0;
+  }
+  .scenario-card p,
+  .evidence-grid p,
+  .faq-list p {
+    font-size: 14px;
+    color: #626370;
+    line-height: 1.75;
+  }
+  .check-label {
+    font-size: 11px;
+    color: #5f4caa;
+    padding: 12px 0;
+    border-block: 1px solid #dedbe9;
+    margin: 16px 0 0;
+  }
+  .scenario-card a {
+    font-size: 13px;
+    color: #594ac4;
+    margin-top: auto;
+    padding-top: 12px;
+  }
+  .section-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 45px;
+    align-items: end;
+  }
+  .section-heading > p {
+    max-width: 360px;
+    font-size: 14px;
+    color: #626370;
+  }
+  .dimension-filters {
+    display: flex;
+    gap: 8px;
+    margin-top: 26px;
+  }
+  .dimension-filters button {
+    border: 1px solid #d9d5e8;
+    border-radius: 25px;
+    padding: 9px 18px;
+    background: white;
+    color: #5d586e;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .dimension-filters button[aria-pressed='true'] {
+    background: #6255cf;
+    color: white;
+    border-color: #6255cf;
+  }
+  .filter-summary {
+    font-size: 11px;
+    color: #767180;
+    margin: 13px 0 0;
+  }
+  .dimension-card {
+    background: white;
+    border: 1px solid #e0dde8;
+    border-radius: 7px;
+    padding: 23px;
+    position: relative;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+  }
+  .dimension-card:hover {
+    border-color: #a99dd8;
+    box-shadow: 0 8px 24px #5144800a;
+  }
+  .dimension-card[hidden] {
+    display: none;
+  }
+  .dimension-meta {
+    display: flex;
+    justify-content: space-between;
+    color: #877ba6;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .dimension-card h3 {
+    margin: 16px 0 8px;
+  }
+  .dimension-card p {
+    font-size: 13px;
+    color: #6a6575;
+    line-height: 1.7;
+  }
+  .dimension-card .dimension-question {
+    color: #34303f;
+    font-weight: 550;
+    margin-bottom: 9px;
+  }
+  .dimension-card a {
+    display: inline-block;
+    color: #594ac4;
+    font-size: 12px;
+    margin-top: 17px;
+  }
+  .dimension-id {
+    display: block;
+    font:
+      10px ui-monospace,
+      monospace;
+    color: #827b91;
+    margin-top: 18px;
+  }
+  .evidence-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 26px;
+    margin-top: 30px;
+  }
+  .evidence-symbol {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    background: #ede9fa;
+    border: 1px solid #ded8f1;
+    color: #6255cf;
+    border-radius: 10px;
+    font-size: 25px;
+  }
+  .evidence-grid a,
+  .faq-section a {
+    font-size: 13px;
+    color: #594ac4;
+  }
+  .faq-section {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 60px;
+  }
+  .faq-list details {
+    border-bottom: 1px solid #dedde3;
+    padding: 18px 0;
+  }
+  .faq-list summary {
+    font-size: 15px;
+    font-weight: 550;
+    cursor: pointer;
+    line-height: 1.5;
+  }
+  .faq-list p {
+    padding-top: 12px;
+  }
+  .capability-section {
+    scroll-margin-top: 20px;
+  }
+  @media (max-width: 960px) {
+    .scenario-grid,
+    .dimension-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .evidence-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .section-heading {
+      display: block;
+    }
+    .section-heading > p {
+      max-width: 600px;
+    }
+    .faq-section {
+      gap: 30px;
+    }
+    .home-header nav {
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+  }
+  @media (max-width: 600px) {
+    .scenario-grid,
+    .dimension-grid,
+    .faq-section {
+      grid-template-columns: 1fr;
+    }
+    .evidence-grid {
+      gap: 20px;
+    }
+    .stack-band {
+      gap: 13px;
+    }
+    .stack-band > a {
+      margin-left: 0;
+    }
+    .dimension-filters {
+      flex-wrap: wrap;
+    }
+    .dimension-filters button {
+      padding: 8px 14px;
+    }
+    .home-header nav a[href='#workflow'] {
+      display: none;
+    }
+  }
+
   :global(body) {
     background: #faf9f6;
     color: #23242d;
