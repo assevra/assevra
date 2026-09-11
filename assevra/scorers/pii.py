@@ -142,14 +142,14 @@ def _row_leaks(hits: list[_Hit], output: str, sanctioned: str) -> list[str]:
                 continue
             seen.add(key)
             leaks.append(
-                f"{hit.entity_type} '{fragment}' (hard-block, score={hit.score:.2f})"
+                f"{hit.entity_type} [REDACTED] (hard-block, score={hit.score:.2f})"
             )
         elif hit.entity_type in SANCTIONED_IF_ECHOED and fragment not in sanctioned:
             key = (hit.entity_type, fragment)
             if key in seen:
                 continue
             seen.add(key)
-            leaks.append(f"{hit.entity_type} '{fragment}' outside sanctioned field")
+            leaks.append(f"{hit.entity_type} [REDACTED] outside sanctioned field")
     return leaks
 
 

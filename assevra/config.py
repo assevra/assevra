@@ -72,7 +72,7 @@ DEFAULTS: dict[str, Any] = {
     },
     "gate": {
         "enabled": False,
-        "fail_on_regression": False,
+        "fail_on_regression": False, "purpose": "release", "required_dimensions": [],
     },
     "validate": {
         "strict": False,
@@ -282,6 +282,14 @@ def _parse_map(lines, i, indent) -> tuple[dict, int]:
 
 def parse_yaml(text: str) -> dict:
     """Parse a config document. Uses PyYAML when available, else the subset parser."""
+    if text.lstrip().startswith("{"):
+        try:
+            loaded = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ConfigError(f"invalid JSON config: {exc.msg}") from exc
+        if not isinstance(loaded, dict):
+            raise ConfigError("config must be a mapping")
+        return loaded
     try:
         import yaml  # type: ignore
     except ImportError:
@@ -483,7 +491,7 @@ def render_template(
     provider: str = "auto",
     model: str = "",
     gate: bool = True,
-    fail_on_regression: bool = True,
+    fail_on_regression: bool = False,
     history: str = ".assevra/history.jsonl",
     attest: bool = True,
 ) -> str:

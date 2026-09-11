@@ -52,7 +52,7 @@ def test_every_bundled_schema_is_valid_json_schema():
 def test_scorecard_conforms_to_its_schema():
     payload = _demo_scorecard().to_dict()
     _check(payload, "scorecard")
-    assert payload["overall_pass"] is True
+    assert payload["decision"] == "SELF_TEST" and payload["overall_pass"] is False
     names = [d["name"] for d in payload["dimensions"]]
     assert "grounding" in names and "injection" in names
 
@@ -99,9 +99,9 @@ def test_calibration_artifact_conforms_to_its_schema():
 
 
 def test_schema_urls_are_stable_and_versioned():
-    assert schemas.SCHEMA_BASE_URL.endswith("/v1")
+    assert schemas.SCHEMA_BASE_URL.endswith("/v2")
     assert schemas.schema_url("scorecard") == (
-        "https://assevra.ai/schema/v1/scorecard.schema.json"
+        "https://assevra.ai/schema/v2/scorecard.schema.json"
     )
 
 

@@ -67,13 +67,13 @@ A run in which every relevant dimension was skipped is not a pass either.
 ## Skipped is not passed
 
 A dimension whose engine was unavailable is reported as `SKIPPED`, contributes no
-evidence, and does not gate.
+evidence, and blocks a release evaluation.
 
 The failure this prevents is specific and common: a CI job loses its API key, the
 judged dimensions stop running, the build stays green, and three months later
 nobody can say when half the gate was switched off. Under Assevra's semantics the
-scorecard says `SKIPPED` in the summary table, the overall verdict fails if
-nothing else was scored, and the artifact records it permanently.
+scorecard says `SKIPPED` in the summary table and the release decision is
+INCOMPLETE. Other passing dimensions cannot replace the missing evidence.
 
 ## Thresholds, and what a threshold means
 

@@ -119,7 +119,7 @@ def test_demo_writes_a_full_artifact_set_offline():
         ):
             assert os.path.getsize(os.path.join(out, name)) > 0
         payload = json.loads(open(os.path.join(out, "scorecard.json"), encoding="utf-8").read())
-        assert payload["overall_pass"] is True
+        assert payload["decision"] == "SELF_TEST" and payload["overall_pass"] is False
         assert payload["judge_model"] == "mock-judge"
 
 
@@ -222,7 +222,7 @@ def test_dogfood_the_repository_dataset_if_present():
     with tempfile.TemporaryDirectory() as tmp:
         assert cli.main(["validate", dataset, "--config", "none"]) == cli.EXIT_OK
         assert cli.main(["run", "--dataset", dataset, "--out-dir", tmp, "--quiet",
-                         "--gate", "--judge-provider", "mock", "--config", "none"]) == cli.EXIT_OK
+                         "--gate", "--judge-provider", "mock", "--config", "none"]) == cli.EXIT_GATE_FAILED
 
 
 def test_demo_dataset_ships_inside_the_package():

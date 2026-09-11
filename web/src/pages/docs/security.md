@@ -101,33 +101,10 @@ repository, a release note, your project's site, an email footer.
 
 ## Assevra's own security posture
 
-**It does not run your agent.** Assevra scores outputs you already captured. It
-does not execute your code, call your tools, or replay your traces.
+**Execution is explicit.** `run` and `scan` score captured records. `capture` executes the command you provide, preserving failed attempts and a completion manifest. It does not replay tools from a trace automatically.
 
-**The core has no third-party dependencies.** Every deterministic scorer, the
-config loader, the scorecard renderer, the schemas, and the whole CLI install
-with nothing else. Vendor SDKs live in optional extras, so your dependency
-surface is whatever you chose to add and no more.
+**Dependencies and data flow.** Core tool-contract checking uses JSON Schema. Deterministic checks run locally after installation; provider SDKs and signing are optional. Cloud judges receive the fields included in their evaluation prompts. Use the configured local provider when you need a local model endpoint.
 
-**It can run entirely offline.** Seven of the nine dimensions are deterministic
-and need no network. For the judged two, the `local` provider speaks the
-OpenAI-compatible chat API over `urllib` — so Ollama, vLLM, and LM Studio work
-with no third-party package and **no data leaving the machine**.
+**Report sharing.** Matched PII values are redacted from PII diagnostic details. Other fields, including case identifiers, tool diagnostics, and judge explanations, may contain sensitive information. Review reports before sharing them. HTML rendering escapes dynamic content; report HTML contains no scripts.
 
-**The HTML report is self-contained.** Inline CSS, no scripts, no external fonts,
-images, or stylesheets. It renders under a strict CSP, opens offline, and cannot
-phone home. CI enforces this on every commit.
-
-**Data handling.** Your dataset stays on your machine unless a judged dimension
-is enabled, in which case the rows for those dimensions are sent to the provider
-you configured — and to no one else. There is no telemetry, no account, and no
-backend.
-
-## Reporting a vulnerability
-
-Report privately, **never in a public issue**: GitHub → _Security_ → _Advisories_
-→ _Report a vulnerability_, or see
-[SECURITY.md](https://github.com/assevra/assevra/blob/main/SECURITY.md).
-
-The most security-relevant surfaces are the signing and verification code and the
-dataset and trace parsers. Reports touching those are especially welcome.
+**Browser scan.** Runtime and package assets are downloaded when you start a scan. Input traces are processed in the tab, not uploaded by Assevra. The result remains TRIAGE and records unavailable coverage. Cost from token usage requires your explicit input/output price table.

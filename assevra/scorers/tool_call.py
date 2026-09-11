@@ -115,6 +115,17 @@ def _iter_calls(row: dict) -> list[dict]:
 
 def _check_schema(name: str, args: dict, contract: dict) -> list[str]:
     problems: list[str] = []
+    if "json_schema" in contract:
+        from jsonschema import Draft202012Validator, FormatChecker
+        from referencing import Registry
+        schema = contract["json_schema"]
+        try:
+            Draft202012Validator.check_schema(schema)
+            validator = Draft202012Validator(schema, registry=Registry(), format_checker=FormatChecker())
+            return [f"{name}: schema assertion {error.validator} failed at /{'/'.join(map(str, error.absolute_path))}"
+                    for error in validator.iter_errors(args)]
+        except Exception as exc:
+            raise ValueError(f"unusable tool schema ({type(exc).__name__}); bundle references locally") from exc
     for required in contract.get("required", []) or []:
         if required not in args:
             problems.append(f"{name}: missing required argument {required!r}")
@@ -183,7 +194,7 @@ def score(rows: list[dict], judge: Optional[object] = None, options: Optional[di
             result.rows.append(
                 RowResult(
                     row_id=row_id,
-                    passed=True,
+                    passed=False, status="ERROR",
                     detail="no tool contract declared (nothing to verify)",
                 )
             )
@@ -199,7 +210,8 @@ def score(rows: list[dict], judge: Optional[object] = None, options: Optional[di
             if not name:
                 problems.append(f"call #{index + 1} has no tool name")
                 continue
-            raw_args = call.get("arguments", call.get("args", call.get("input")))
+            body = call.get("function") if isinstance(call.get("function"), dict) else call
+            raw_args = body.get("arguments", body.get("args", body.get("input")))
             args, err = _parse_arguments(raw_args)
             if err:
                 problems.append(f"{name}: {err}")
@@ -210,7 +222,10 @@ def score(rows: list[dict], judge: Optional[object] = None, options: Optional[di
             if name in forbidden:
                 problems.append(f"called forbidden tool {name!r}")
             if name in schemas:
-                problems.extend(_check_schema(name, args, schemas[name]))
+                try:
+                    problems.extend(_check_schema(name, args, schemas[name]))
+                except ValueError as exc:
+                    problems.append("EVALUATOR_ERROR: " + str(exc))
 
         for want in expected:
             if not isinstance(want, dict):
@@ -221,7 +236,7 @@ def score(rows: list[dict], judge: Optional[object] = None, options: Optional[di
 
         if problems:
             result.rows.append(
-                RowResult(row_id=row_id, passed=False, detail="; ".join(problems))
+                RowResult(row_id=row_id, passed=False, status="ERROR" if any(p.startswith("EVALUATOR_ERROR:") for p in problems) else "FAIL", detail="; ".join(problems))
             )
         else:
             made = ", ".join(name for name, _ in observed) or "none"
@@ -239,6 +254,8 @@ def validate_row(row: dict, options: Optional[dict] = None) -> list[tuple]:
     """Extra structural checks surfaced by ``assevra validate``."""
     messages: list[tuple] = []
     calls = row.get("tool_calls")
+    if isinstance(calls, list) and any(not isinstance(c, dict) for c in calls):
+        messages.append(("error", "bad_type", "each tool call must be an object", "tool_calls", None))
     if calls is not None and not isinstance(calls, (list, dict)):
         messages.append(
             ("error", "bad_type", "tool_calls must be a list of call objects", "tool_calls", None)

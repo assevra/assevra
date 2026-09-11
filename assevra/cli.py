@@ -144,6 +144,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             thresholds=_parse_thresholds(args.threshold),
             validate=False if args.no_validate else None,
             strict=True if args.strict else None,
+            purpose=args.purpose,
+            required_dimensions=args.require_dimension,
         )
     except api.DatasetError as exc:
         print(f"[assevra] {exc}", file=sys.stderr)
@@ -152,6 +154,37 @@ def cmd_run(args: argparse.Namespace) -> int:
         return EXIT_USAGE
     except providers.ProviderError as exc:
         _die(str(exc))
+
+    regressed = False
+    history_path = args.history or cfg.get("history.path", "")
+    require_comparison = cfg.pick(args.fail_on_regression, "gate.fail_on_regression", False)
+    if require_comparison and not history_path:
+        scorecard.comparison = {"required": True, "status": "missing_history"}
+    if history_path:
+        from . import history as history_mod
+
+        label = args.label or cfg.get("history.label", "")
+        baseline_label = args.baseline or cfg.get("history.baseline", "")
+        record = history_mod.record_from_scorecard(scorecard, label, _now())
+        past = history_mod.load_history(history_path)
+        baseline = history_mod.find_baseline(past, baseline_label or None)
+        reasons = history_mod.comparability(baseline, record) if baseline is not None else ["baseline missing"]
+        scorecard.comparison = {"required": require_comparison, "status": "incomparable" if reasons else "comparable", "reasons": reasons, "baseline_label": baseline_label}
+        if baseline is not None and not reasons:
+            deltas = history_mod.compare(baseline, record)
+            print()
+            print(history_mod.render_comparison(baseline, record, deltas))
+            regressed = history_mod.is_overall_regression(baseline, record, deltas)
+        else:
+            where = f"label {baseline_label!r}" if baseline_label else "empty history"
+            print(f"[assevra] history: no prior run to compare ({where}); recording baseline.")
+        scorecard.comparison["regressed"] = regressed
+        record["overall_pass"] = scorecard.overall_pass
+        record["decision"] = scorecard.decision
+        history_mod.append_record(history_path, record)
+        note = f" (label: {label})" if label else ""
+        print(f"[assevra] appended this run to {history_path}{note}")
+
 
     written = api.write_reports(scorecard, out_dir, formats)
     if not args.quiet:
@@ -200,34 +233,15 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"[assevra] wrote {directory / 'agent-card.md'}")
         print(f"[assevra] wrote {directory / 'agent-card.json'}")
 
-    regressed = False
-    history_path = args.history or cfg.get("history.path", "")
-    if history_path:
-        from . import history as history_mod
-
-        label = args.label or cfg.get("history.label", "")
-        baseline_label = args.baseline or cfg.get("history.baseline", "")
-        record = history_mod.record_from_scorecard(scorecard, label, _now())
-        past = history_mod.load_history(history_path)
-        baseline = history_mod.find_baseline(past, baseline_label or None)
-        if baseline is not None:
-            deltas = history_mod.compare(baseline, record)
-            print()
-            print(history_mod.render_comparison(baseline, record, deltas))
-            regressed = history_mod.is_overall_regression(baseline, record, deltas)
-        else:
-            where = f"label {baseline_label!r}" if baseline_label else "empty history"
-            print(f"[assevra] history: no prior run to compare ({where}); recording baseline.")
-        history_mod.append_record(history_path, record)
-        note = f" (label: {label})" if label else ""
-        print(f"[assevra] appended this run to {history_path}{note}")
-
     _write_ci_summary(scorecard, written, regressed)
 
     exit_code = EXIT_OK
+    if require_comparison and scorecard.comparison.get("status") != "comparable":
+        exit_code = EXIT_GATE_FAILED
+        print("[assevra] comparison: INCOMPLETE — supply a compatible, reviewed baseline.")
     if cfg.pick(args.gate, "gate.enabled", False) and not scorecard.overall_pass:
         exit_code = EXIT_GATE_FAILED
-        print("[assevra] gate: FAILED — a scored dimension is below its threshold.")
+        print(f"[assevra] gate: {scorecard.decision} — inspect required coverage, findings, and comparison in scorecard.json.")
     if cfg.pick(args.fail_on_regression, "gate.fail_on_regression", False) and regressed:
         if exit_code == EXIT_OK:
             print("[assevra] gate: FAILED — a dimension regressed against the baseline.")
@@ -244,7 +258,7 @@ def _write_ci_summary(scorecard, written, regressed: bool) -> None:
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not summary_path:
         return
-    verdict = "✅ PASS" if scorecard.overall_pass else "❌ FAIL"
+    verdict = scorecard.decision
     lines = [
         "## Assevra reliability scorecard",
         "",
@@ -897,6 +911,8 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
         if not spec.needs_judge or name not in grouped:
             continue
         result = spec.score(grouped[name], judge, cfg.scorer_options())
+        if result.skipped or any(r.status in ("ERROR", "ABSTAIN") for r in result.rows):
+            _die("calibration is incomplete: repair missing or invalid judge results before measuring agreement")
         judged, human = [], []
         for row_result in result.rows:
             if row_result.row_id in id_to_human:
@@ -996,6 +1012,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--threshold", action="append", metavar="DIM=VALUE", default=None,
         help="override a dimension's pass threshold; repeatable",
     )
+    run.add_argument("--purpose", choices=["release", "scan", "self_test"], help="artifact purpose; only release can PASS")
+    run.add_argument("--require-dimension", action="append", help="required dimension (repeat to declare release scope)")
     run.add_argument("--gate", action="store_true", help="exit non-zero if the scorecard fails")
     run.add_argument(
         "--fail-on-regression", action="store_true",

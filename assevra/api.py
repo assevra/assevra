@@ -35,13 +35,15 @@ from __future__ import annotations
 
 import datetime
 import json
+import hashlib
+import math
 from pathlib import Path
 from typing import Any, Iterable, Optional, Union
 
 from . import config as config_mod
 from . import registry, reliability as reliability_mod, validate as validate_mod
 from .judge import build_judge
-from .scorecard import ASSEVRA_VERSION, DimensionResult, Scorecard
+from .scorecard import ASSEVRA_VERSION, DimensionResult, RowResult, Scorecard
 
 # Importing the scorers package registers the nine built-in dimensions.
 from . import scorers as _scorers  # noqa: F401
@@ -66,7 +68,7 @@ def resolve_config(config: ConfigLike = None) -> config_mod.Config:
         return config_mod.load(str(config))
     if isinstance(config, dict):
         merged = config_mod._deep_merge(config_mod.DEFAULTS, config)
-        return config_mod.Config(merged, None, [])
+        return config_mod.Config(merged, None, config_mod._unknown_keys(config, config_mod.DEFAULTS))
     return config_mod.load()
 
 
@@ -121,6 +123,8 @@ def evaluate(
     options: Optional[dict] = None,
     validate: Optional[bool] = None,
     strict: Optional[bool] = None,
+    purpose: Optional[str] = None,
+    required_dimensions: Optional[list[str]] = None,
 ) -> Scorecard:
     """Score records (or a dataset file) and return a :class:`Scorecard`.
 
@@ -144,8 +148,15 @@ def evaluate(
         raise DatasetError("pass exactly one of `records` or `dataset`")
 
     cfg = resolve_config(config)
+    purpose = purpose or cfg.get("gate.purpose", "release")
+    if purpose not in ("release", "scan", "self_test"):
+        raise DatasetError("purpose must be release, scan, or self_test")
+    if purpose == "release" and cfg.unknown_keys:
+        raise DatasetError("unknown release configuration keys: " + ", ".join(cfg.unknown_keys))
     rows = list(records) if records is not None else load_dataset(dataset)
     dataset_label = dataset or "(in-memory records)"
+    if purpose == "release" and any(isinstance(row, dict) and row.get("_capture_error") for row in rows):
+        raise DatasetError("capture is incomplete: repair failed attempts and rerun the full suite")
 
     scorer_options = dict(cfg.scorer_options())
     if options:
@@ -153,6 +164,9 @@ def evaluate(
 
     should_validate = cfg.get("validate.on_run", True) if validate is None else validate
     is_strict = cfg.get("validate.strict", False) if strict is None else strict
+    if purpose == "release":
+        should_validate = True
+        is_strict = True
     if should_validate:
         report = _validate_rows(rows, dataset_label, is_strict, scorer_options)
         if not report.ok:
@@ -175,10 +189,24 @@ def evaluate(
             temperature=cfg.get("judge.temperature", 0.0),
         )
 
-    grouped = group_by_dimension(rows)
+    controls = [row for row in rows if row.get("dimension") == "pii" and "negative-example" in row.get("tags", [])]
+    agent_rows = [row for row in rows if row not in controls]
+    grouped = group_by_dimension(agent_rows)
+    required = required_dimensions if required_dimensions is not None else cfg.get("gate.required_dimensions", [])
+    if not isinstance(required, list) or any(not isinstance(name, str) or not registry.has_scorer(name) for name in required):
+        raise DatasetError("gate.required_dimensions must be a list of registered dimensions")
     effective_thresholds = dict(cfg.get("thresholds", {}) or {})
     if thresholds:
         effective_thresholds.update(thresholds)
+    for name, value in effective_thresholds.items():
+        if not registry.has_scorer(name) or isinstance(value, bool):
+            raise DatasetError(f"invalid threshold for {name}")
+        try:
+            valid = math.isfinite(float(value)) and 0 <= float(value) <= 1
+        except (ValueError, TypeError):
+            valid = False
+        if not valid:
+            raise DatasetError(f"threshold for {name} must be finite and between 0 and 1")
 
     dimensions: list[DimensionResult] = []
     for name in registry.dimensions():
@@ -186,10 +214,20 @@ def evaluate(
             continue
         spec = registry.get_scorer(name)
         result = spec.score(grouped[name], judge, scorer_options)
+        if not result.skipped:
+            measured_ids = {r.row_id for r in result.rows}
+            for source in grouped[name]:
+                if source.get("id") not in measured_ids:
+                    result.rows.append(RowResult(str(source.get("id", "?")), False, "scorer omitted an expected measurement", status="ERROR"))
         override = effective_thresholds.get(name)
         if override is not None:
             result.threshold = float(override)
         dimensions.append(result)
+        source_rows = {str(row.get("id", "?")): row for row in grouped[name]}
+        for outcome in result.rows:
+            source = source_rows.get(str(outcome.row_id), {})
+            outcome.case_id = str(source.get("case_id", outcome.row_id))
+            outcome.trace_id = str(source.get("trace_id", ""))
 
     # pass^k / consistency over any repeated-trial cases (empty otherwise).
     id_to_case = {
@@ -198,7 +236,7 @@ def evaluate(
     k = int(pass_k if pass_k is not None else cfg.get("reliability.pass_k", 2))
     reliability = []
     for dimension in dimensions:
-        passed_by_case = reliability_mod.group_passed_by_case(dimension.rows, id_to_case)
+        passed_by_case = reliability_mod.group_passed_by_case([r for r in dimension.rows if r.status in ("PASS", "FAIL")], id_to_case)
         computed = reliability_mod.compute_dimension(dimension.name, passed_by_case, k)
         if computed is not None:
             reliability.append(computed)
@@ -206,11 +244,18 @@ def evaluate(
     return Scorecard(
         dimensions=dimensions,
         dataset=dataset_label,
-        dataset_sha256=validate_mod.dataset_sha256(dataset) if dataset else None,
+        dataset_sha256=validate_mod.dataset_sha256(dataset) if dataset else hashlib.sha256(json.dumps(rows, sort_keys=True, ensure_ascii=False).encode()).hexdigest(),
         judge_model=getattr(judge, "model", "") if judge is not None else "",
         judge_provider=getattr(judge, "provider", "") if judge is not None else "",
         reliability=reliability,
         generated_at=_utc_now(),
+        purpose=purpose,
+        suite_sha256=hashlib.sha256(json.dumps([{k: v for k, v in row.items() if k not in {"agent_output", "agent_actions", "tool_calls", "observed_state", "usage", "cost_usd", "latency_ms", "trace_id", "span_id", "trial_id"}} for row in rows], sort_keys=True, ensure_ascii=False).encode()).hexdigest(),
+        required_dimensions=required or list(grouped),
+        validation={"complete": bool(should_validate and (is_strict or purpose != "release")), "strict": is_strict},
+        coverage={"input_rows": len(rows), "agent_rows": len(agent_rows), "control_rows": len(controls)},
+        controls=[r.to_dict() for r in registry.get_scorer("pii").score(controls, None, scorer_options).rows] if controls else [],
+        policy_sha256=hashlib.sha256(json.dumps({"purpose": purpose, "required_dimensions": sorted(required or list(grouped)), "thresholds": {d.name: d.threshold for d in dimensions}, "scorer_options": scorer_options, "version": ASSEVRA_VERSION}, sort_keys=True).encode()).hexdigest(),
     )
 
 

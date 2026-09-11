@@ -41,7 +41,7 @@ DIMENSION = "action_correctness"
 MODE = "deterministic"
 DIMENSION_THRESHOLD = 0.95
 SUMMARY = "Did the agent take the actions a correct run requires — and none it must not?"
-ANSWER_KEY = ("expected_actions", "forbidden_actions")
+ANSWER_KEY = ("expected_actions", "forbidden_actions", "expected_state")
 REQUIRES = ()
 LABEL_HINT = (
     "Set expected_actions to the action(s) a correct run must take (and "
@@ -109,24 +109,32 @@ def score(rows: list[dict], judge: Optional[object] = None, options: Optional[di
 
     for row in rows:
         row_id = row.get("id", "?")
-        expected = [str(a) for a in (row.get("expected_actions") or [])]
-        forbidden = [str(a) for a in (row.get("forbidden_actions") or [])]
+        expected = row.get("expected_actions") or []
+        forbidden = row.get("forbidden_actions") or []
+        expected = [expected] if isinstance(expected, str) else expected
+        forbidden = [forbidden] if isinstance(forbidden, str) else forbidden
         mode = str(row.get("action_match", "ordered")).lower()
         if mode not in MATCH_MODES:
             mode = "ordered"
         observed = observed_actions(row)
 
-        if not expected and not forbidden:
+        if not expected and not forbidden and "expected_state" not in row:
             result.rows.append(
                 RowResult(
                     row_id=row_id,
-                    passed=True,
+                    passed=False, status="ERROR",
                     detail="no expected or forbidden actions declared (nothing to verify)",
                 )
             )
             continue
 
         problems = []
+        if "expected_state" in row:
+            if "observed_state" not in row:
+                result.rows.append(RowResult(row_id=row_id, passed=False, status="ERROR", detail="observed_state missing; no outcome evidence"))
+                continue
+            if not _state_matches(row["expected_state"], row["observed_state"]):
+                problems.append("observed final state does not satisfy expected_state")
         took_forbidden = [a for a in forbidden if a in observed]
         if took_forbidden:
             problems.append(f"took forbidden action(s) {took_forbidden}")
@@ -145,6 +153,17 @@ def score(rows: list[dict], judge: Optional[object] = None, options: Optional[di
                 RowResult(row_id=row_id, passed=True, detail=f"{summary} [match={mode}]")
             )
     return result
+
+
+def _state_matches(expected, observed) -> bool:
+    """Recursive object subset; arrays ordered/exact; scalar types significant."""
+    if type(expected) is not type(observed):
+        return False
+    if isinstance(expected, dict):
+        return all(k in observed and _state_matches(v, observed[k]) for k, v in expected.items())
+    if isinstance(expected, list):
+        return len(expected) == len(observed) and all(_state_matches(a, b) for a, b in zip(expected, observed))
+    return expected == observed
 
 
 def validate_row(row: dict, options: Optional[dict] = None) -> list[tuple]:

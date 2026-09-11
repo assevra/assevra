@@ -78,16 +78,17 @@ def test_reliability_mappings_present_only_when_scorecard_has_reliability():
 
 
 def test_signature_note_included_when_provided():
-    sig = {
-        "algorithm": "ed25519",
-        "public_key": "PUB",
-        "content_sha256": "abc123",
-        "signed_at": "T",
-    }
-    card = attest.build_card_dict(_scorecard([_dim("pii")]), signature=sig, generated_at="T")
-    assert card["signature"]["content_sha256"] == "abc123"
-    md = attest.render_markdown(card)
-    assert "signed" in md.lower() and "abc123"[:12] in md
+    import pytest
+    pytest.importorskip("cryptography")
+    from assevra import signing
+    payload = _scorecard([_dim("pii")])
+    key, _ = signing.generate_keypair()
+    sig = signing.sign_scorecard(payload, key, signed_at="T")
+    card = attest.build_card_dict(payload, signature=sig, generated_at="T")
+    assert card["signature"]["integrity_verified"]
+    assert not card["signature"]["identity_verified"]
+    with pytest.raises(signing.SigningError):
+        attest.build_card_dict(dict(payload, overall_pass=False), signature=sig)
 
 
 def test_markdown_and_json_render():

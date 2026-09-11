@@ -55,7 +55,7 @@ jobs:
           python - <<'PY'
           import filecmp, pathlib, shutil
           from assevra import schemas
-          served = pathlib.Path("web/public/schema/v1"); served.mkdir(parents=True, exist_ok=True)
+          served = pathlib.Path("web/public/schema/v2"); served.mkdir(parents=True, exist_ok=True)
           for name in schemas.NAMES:
               target = served / f"{name}.schema.json"
               source = schemas.schema_path(name)
@@ -78,7 +78,7 @@ jobs:
 
       - name: Build
         working-directory: web
-        run: npm run build
+        run: npm run validate
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

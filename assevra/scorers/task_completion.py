@@ -63,7 +63,7 @@ def score(
             result.rows.append(
                 RowResult(
                     row_id=row.get("id", "?"),
-                    passed=True,
+                    passed=False, status="ERROR",
                     detail="no must_include declared (nothing to verify)",
                 )
             )
@@ -84,3 +84,10 @@ def score(
                 )
             )
     return result
+
+
+def validate_row(row, options=None):
+    value = row.get("must_include", [])
+    if not isinstance(value, list) or any(not isinstance(item, str) or not item.strip() for item in value):
+        return [("error", "bad_type", "must_include must be a list of nonempty strings", "must_include", None)]
+    return []

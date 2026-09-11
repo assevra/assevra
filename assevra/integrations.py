@@ -66,7 +66,7 @@ class Integration:
             "",
             "```bash",
             f"assevra validate {dataset}   # confirm every row is LABELED",
-            "assevra run --gate            # score, gate, and write the artifacts",
+            f"assevra run --dataset {dataset} --config none --gate",
             "```",
         ]
         if self.notes:
@@ -134,7 +134,8 @@ for example_input in inputs:
         # Carry the calls through: they feed `tool_call` and `action_correctness`.
         "tool_calls": [
             {"name": c["name"], "arguments": c.get("args", {})}
-            for c in getattr(final, "tool_calls", []) or []
+            for message in state["messages"]
+            for c in getattr(message, "tool_calls", []) or []
         ],
     })
 
@@ -165,7 +166,7 @@ mv traces.jsonl traces.json
         capture="""\
 ```python
 # Langfuse's decorators or SDK already record every generation. Nothing to add.
-from langfuse.decorators import observe
+from langfuse import observe
 
 @observe()
 def handle(message: str) -> str:
@@ -178,9 +179,15 @@ import json
 from langfuse import Langfuse
 
 client = Langfuse()
-page = client.api.observations.get_many(type="GENERATION", limit=200)
+records, page_number = [], 1
+while True:
+    page = client.api.observations.get_many(type="GENERATION", limit=100, page=page_number)
+    records.extend(json.loads(o.json()) for o in page.data)
+    if len(page.data) < 100:
+        break
+    page_number += 1
 with open("traces.json", "w") as fh:
-    json.dump([o.dict() for o in page.data], fh)
+    json.dump(records, fh)
 ```""",
         notes=(
             "If your Langfuse project nests the prompt under a custom key, map it "
@@ -205,19 +212,19 @@ px.launch_app()
         export="""\
 ```python
 import json
-import phoenix as px
+from phoenix.client import Client
 
-spans = px.Client().get_spans_dataframe()
+spans = Client().spans.get_spans_dataframe()
 spans.to_json("traces.json", orient="records")
 ```""",
     ),
     "openai-agents": Integration(
         name="openai-agents",
         title="OpenAI Agents SDK",
-        bootstrap_format="openai",
+        bootstrap_format="generic",
         summary=(
             "The Agents SDK records the full message list per run. Assevra's `openai` "
-            "adapter reads that shape directly, including `{request, response}` pairs."
+            "capture recipe preserves function calls and their outputs across the run."
         ),
         capture="""\
 ```python
@@ -227,9 +234,14 @@ from agents import Agent, Runner
 records = []
 for prompt in prompts:
     result = await Runner.run(agent, prompt)
+    items = result.to_input_list()
     records.append({
-        "messages": [{"role": "user", "content": prompt}],
-        "choices": [{"message": {"role": "assistant", "content": result.final_output}}],
+        "input": prompt,
+        "agent_output": str(result.final_output),
+        "trajectory": items,
+        "tool_calls": [{"name": item["name"], "arguments": item.get("arguments", "{}")}
+                       for item in items if item.get("type") == "function_call"],
+        "tool_results": [item for item in items if item.get("type") == "function_call_output"],
     })
 
 with open("traces.json", "w") as fh:

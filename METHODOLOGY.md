@@ -51,8 +51,8 @@ These are the rules that make a score reproducible and honest.
    judge model, hashes the rubric, and writes the hash into the scorecard.
    Changing any of them changes the number — say so.
 5. **Skipped is not passed.** When a dimension's engine is unavailable (no judge
-   key, detector not installed), it is *skipped*, and a skipped dimension does
-   not gate. A run with every relevant dimension skipped is not a pass.
+   key), it is *skipped* and blocks a release-purpose evaluation. Declare required
+   dimensions to detect entirely absent measurements as well.
 6. **State what it does not measure.** See §6.
 
 ## 3. Dimension specifications
@@ -246,10 +246,7 @@ before it is scored**, with every row in exactly one state:
 
 - **LABELED** — the row carries an answer key and can produce a meaningful
   verdict.
-- **UNLABELED** — the row parses and will score, but there is nothing to verify:
-  its "pass" is *vacuous*. A `task_completion` row with an empty required-facts
-  list is the canonical case. This is legitimate while labeling is in progress and
-  dangerous the moment anyone quotes the number.
+- **UNLABELED** — the row has no acceptance criteria and cannot establish a meaningful verdict. Release evaluation rejects it.
 - **INVALID** — the row is structurally unusable (no id, unknown dimension, wrong
   type, duplicate id). Evaluation must not proceed on it.
 
@@ -280,7 +277,7 @@ against any earlier minor version. Breaking that requires a new major version, n
 a silent mutation.
 
 The reference implementation publishes these schemas at
-`https://assevra.ai/schema/v1/` and validates every artifact against them in CI.
+`https://assevra.ai/schema/v2/` and validates every artifact against them in CI.
 
 ## 7. How to report a score
 
@@ -323,8 +320,18 @@ provide. It does **not**:
   resisted the attack you wrote. The space of attacks is open-ended.
 - **Predict cost or latency.** Both dimensions score the runs you recorded,
   against budgets and a price table you supplied.
-- **Score an unlabeled row meaningfully.** An unlabeled row passes vacuously; §5
+- **Score an unlabeled row meaningfully.** A release evaluation rejects unlabeled rows; §5
   exists so that never goes unnoticed.
 
 Honesty about these limits is part of the methodology, not a disclaimer bolted
 on at the end.
+
+## Version 0.6 release semantics
+
+The schema-v2 decision is PASS, FAIL, INCOMPLETE, TRIAGE, or SELF_TEST. Only complete release-purpose PASS sets overall_pass=true. All included dimensions must complete; explicitly required dimensions also detect absent rows. A scan and a mock evaluator demonstration never qualify as release evidence.
+
+Errors and abstentions are excluded from agent pass-rate denominators and prevent a complete release verdict. PII detector controls are reported separately. Valid model scores are integer 1–5; boolean verdicts must be actual JSON booleans. Configured panel members must all return valid evidence, and tied votes are unusable evidence requiring review.
+
+Action correctness optionally checks final state using recursive object-subset, ordered-array, type-sensitive equality. Imported tool contracts retain full JSON Schema and use Draft 2020-12 validation with local references. Structural validity does not prove authorization or business success.
+
+Findings provide deterministic suggestions, not proven root causes. Verify a change by executing the agent and rerunning the unchanged full suite. Required baseline comparisons reject missing suite/policy hashes or differing judge identity. Repeated trials may be correlated; Wilson intervals and pass^k summaries describe the supplied cases and do not establish a universal deployment guarantee. Calibration remains a user-run study against representative human labels, not an automatically enforced certification.

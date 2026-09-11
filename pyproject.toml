@@ -1,14 +1,15 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "assevra"
-version = "0.5.0"
+version = "0.6.0"
 description = "Release evidence for AI agents: turn agent test runs into signed, statistically defensible scorecards that gate every release."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Veera Ravindra Divi" }]
 keywords = [
     "llm",
@@ -30,7 +31,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -40,11 +40,8 @@ classifiers = [
     "Topic :: Software Development :: Quality Assurance",
     "Topic :: Software Development :: Testing",
 ]
-# The core -- every deterministic scorer, the config loader, the scorecard, the
-# schemas, and the whole CLI -- has NO third-party dependencies. That is a
-# feature, not an accident: `pip install assevra` must never be a negotiation
-# with a security team. Vendor SDKs live in the extras below.
-dependencies = []
+# Full tool contracts use JSON Schema; vendor SDKs remain optional.
+dependencies = ["jsonschema>=4.23,<5"]
 
 [project.optional-dependencies]
 # Detectors

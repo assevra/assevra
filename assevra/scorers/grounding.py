@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 from typing import Optional
 
-from ..judge import Judge, panel_note
+from ..judge import Judge, panel_note, validate_verdict
 from ..scorecard import DimensionResult, RowResult
 
 DIMENSION = "grounding"
@@ -98,12 +98,13 @@ def score(
             context=row.get("context", ""), answer=_output(row)
         )
         parsed = judge.score_json(prompt)
+        parsed = validate_verdict(parsed)
         if "_parse_error" in parsed:
             result.rows.append(
                 RowResult(
                     row_id=row.get("id", "?"),
                     passed=False,
-                    detail=f"unparseable judge output: {parsed['_parse_error']}",
+                    status="ERROR", detail="evaluator returned an invalid verdict",
                 )
             )
             continue
@@ -114,7 +115,7 @@ def score(
                 RowResult(
                     row_id=row.get("id", "?"),
                     passed=False,
-                    detail=f"judge returned no integer score: {parsed}",
+                    status="ERROR", detail="evaluator returned no valid score",
                 )
             )
             continue

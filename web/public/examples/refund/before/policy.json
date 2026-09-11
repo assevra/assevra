@@ -1,0 +1,18 @@
+{
+  "judge": {
+    "provider": "none"
+  },
+  "gate": {
+    "purpose": "release",
+    "required_dimensions": [
+      "action_correctness",
+      "tool_call",
+      "pii"
+    ]
+  },
+  "thresholds": {
+    "action_correctness": 1,
+    "tool_call": 1,
+    "pii": 1
+  }
+}

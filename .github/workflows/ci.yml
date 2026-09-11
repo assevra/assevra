@@ -35,13 +35,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.10", "3.11", "3.12", "3.13"]
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - name: Install (core only — the core must stay dependency-free)
+      - name: Install core dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e .
@@ -164,7 +164,7 @@ jobs:
           python - <<'PY'
           import filecmp, pathlib, sys
           from assevra import schemas
-          served = pathlib.Path("web/public/schema/v1")
+          served = pathlib.Path("web/public/schema/v2")
           missing = []
           for name in schemas.NAMES:
               target = served / f"{name}.schema.json"
@@ -209,35 +209,22 @@ jobs:
       - name: Compare against the committed snapshot
         run: python tests/snapshot.py --check
 
-  # 10. Dogfood: gate this repository on its own scorer.
-  dogfood:
-    name: dogfood the gate
+  reference:
+    name: executable fix and verify
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     needs: [unit]
-    env:
-      # Empty on forks by design: judged dimensions are then SKIPPED, not failed.
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install with the full PII detector
-        run: |
-          pip install -e ".[pii,sign]"
-          python -m spacy download en_core_web_lg
-      - name: Install the judge SDK when a key is configured
-        if: env.ANTHROPIC_API_KEY != ''
-        run: pip install -e ".[anthropic]"
-      - name: Validate the golden dataset before scoring it
-        run: assevra validate datasets/golden.jsonl --strict
-      - name: Score, gate, and attest
-        run: assevra run --gate --attest
+      - run: pip install -e .
+      - run: python -m assevra.reference --out-dir /tmp/reference
+      - run: assevra run --dataset /tmp/reference/after/cases.jsonl --config /tmp/reference/after/policy.json --out-dir /tmp/release-evidence --gate
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: scorecard
+          name: reference-workflow
           path: |
-            .assevra/out/
-          if-no-files-found: warn
+            /tmp/reference/
+            /tmp/release-evidence/
