@@ -1,0 +1,48 @@
+{
+  "version": "0.6.0",
+  "verified_at": "2026-09-11T21:14:46.733758+00:00",
+  "release_commit": "ef6f079f12c8f8352501bb1fe55647a69692a71b",
+  "implementation_commit": "ba80f62bf35a5ea5814d4a07140c293f2301b977",
+  "github_release": "https://github.com/assevra/assevra/releases/tag/v0.6.0",
+  "pull_request": "https://github.com/assevra/assevra/pull/22",
+  "pypi": "https://pypi.org/project/assevra/0.6.0/",
+  "zenodo_doi": "10.5281/zenodo.22714959",
+  "zenodo_record": "https://zenodo.org/records/22714959",
+  "website": "https://assevra.ai",
+  "schema_version": "2.0",
+  "artifacts": [
+    {
+      "filename": "assevra-0.6.0-py3-none-any.whl",
+      "sha256": "caee5965d1ebfe0ce5e75894a365f821636d71905c67c644ad643bc6a7cca2ab"
+    },
+    {
+      "filename": "assevra-0.6.0.tar.gz",
+      "sha256": "e1912ad15053d26be53e15f4ca22ff1ade9d8875bf332273eec906b657047f88"
+    }
+  ],
+  "verification": {
+    "local_python_tests": 218,
+    "github_python_matrix": [
+      "3.10",
+      "3.11",
+      "3.12",
+      "3.13",
+      "3.14"
+    ],
+    "package_metadata": "passed",
+    "clean_wheel_example_and_gate": "passed",
+    "website_type_lint_format_build": "passed",
+    "npm_audit_vulnerabilities": 0,
+    "desktop_mobile_homepage": "passed",
+    "browser_scan_and_tool_definition_import": "passed",
+    "v1_schema_preserved": true
+  },
+  "ci": "https://github.com/assevra/assevra/actions/runs/34648104338",
+  "website_deployment": "https://github.com/assevra/assevra/actions/runs/34648104424",
+  "scope_limits": [
+    "Reference workflow is synthetic and makes no model calls.",
+    "Hosted SDK recipes require an adopter smoke test.",
+    "Model judge calibration is a user-run study against representative human labels.",
+    "Required dimensions and sufficient case coverage remain explicit release-policy decisions."
+  ]
+}
