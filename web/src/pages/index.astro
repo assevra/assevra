@@ -169,12 +169,12 @@ const integrations = [
               ))
             }
           </ul>
-          <a class="button primary" href="/examples/refund"
-            >Explore a failure and its fix <span>→</span></a
-          >
-          <a class="text-link" href="/try">Try a browser scan ↗</a>
+          <p class="onboarding-promise">Try a sample scorecard in under 5 minutes.</p>
+          <a class="button primary" href="/try">Get your first scorecard <span>→</span></a>
+          <a class="text-link" href="/examples/refund">Explore a failure and its fix →</a>
           <p class="fine">
-            No account required. Deterministic checks run locally after installation.
+            No signup. No installation. Use the sample or drop in your own trace. Browser scans
+            provide initial triage; full release checks require setup.
           </p>
         </div>
         <div class="evidence-panel">
@@ -973,6 +973,12 @@ python -m assevra.reference --out-dir reference-output</code></pre><div
   .fine {
     font-size: 12px;
     color: #777783;
+  }
+  .onboarding-promise {
+    margin: 1.5rem 0 0.85rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #4338ca;
   }
   .hero .fine {
     margin-top: 13px;
