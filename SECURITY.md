@@ -38,8 +38,9 @@ embedded key alone proves only internal consistency, not who signed it.
 
 ## Official signing key
 
-Scorecards published by the maintainer (Veera Ravindra Divi) are signed with a
-long-lived Ed25519 key. Its public half is published here and on
+Assevra is maintained by Veera Ravindra Divi and Sneha Gullapalli. Official
+project scorecards are signed with a long-lived Ed25519 key. Its public half is
+published here and on
 <https://assevra.ai> so anyone can pin it:
 
 ```
@@ -57,7 +58,7 @@ python -m assevra verify --scorecard scorecard.json --signature scorecard.sig.js
 
 > Obtain this key from a channel you trust (this file over HTTPS, the project
 > site). A scorecard that verifies against any *other* key was not signed by the
-> maintainer.
+> project signing key.
 
 ## Publishing your own key
 

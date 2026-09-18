@@ -31,7 +31,7 @@ The library path::
     result = evaluate(records=rows)
     result.overall_pass
 
-A personal open-source research project by Veera Ravindra Divi. MIT licensed.
+A personal open-source research project by Veera Ravindra Divi and Sneha Gullapalli. MIT licensed.
 See METHODOLOGY.md for the dimension specifications and their limits.
 """
 from .api import (

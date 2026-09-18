@@ -17,8 +17,10 @@ type: software
 authors:
   - family-names: Divi
     given-names: Veera Ravindra
-version: "0.6.0"
-date-released: "2026-09-11"
+  - family-names: Gullapalli
+    given-names: Sneha
+version: "0.6.0.post1"
+date-released: "2026-09-18"
 license: MIT
 doi: 10.5281/zenodo.21200852
 identifiers:

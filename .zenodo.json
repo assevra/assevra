@@ -7,6 +7,9 @@
   "creators": [
     {
       "name": "Divi, Veera Ravindra"
+    },
+    {
+      "name": "Gullapalli, Sneha"
     }
   ],
   "keywords": [
@@ -24,6 +27,6 @@
     "AI governance",
     "software engineering"
   ],
-  "version": "0.6.0",
-  "publication_date": "2026-09-11"
+  "version": "0.6.0.post1",
+  "publication_date": "2026-09-18"
 }

@@ -1,7 +1,7 @@
 # The Assevra Reliability Scorecard
 
 **Version 0.4** · A methodology for measuring the reliability of LLM agents, and
-for emitting release evidence about them. Maintained by Veera Ravindra Divi.
+for emitting release evidence about them. Maintained by Veera Ravindra Divi and Sneha Gullapalli.
 MIT licensed.
 
 This document is the specification. The Python package in this repository is one

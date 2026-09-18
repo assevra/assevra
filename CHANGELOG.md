@@ -4,6 +4,11 @@ All notable changes to Assevra are recorded here. The project follows
 semantic-ish versioning; the reported "measured with Assevra vX.Y" number is
 bumped whenever a scorer or rubric change could change a reported score.
 
+## 0.6.0.post1 — 2026-09-18
+
+- List Veera Ravindra Divi and Sneha Gullapalli together in project credits, package metadata, licensing, and citations.
+- Metadata and documentation update only; scoring behavior and the reported scoring version remain 0.6.0.
+
 ## 0.6.0 — 2026-09-11
 
 - Explicit PASS / FAIL / INCOMPLETE / TRIAGE / SELF_TEST decisions and required release coverage; strict validation cannot be bypassed by release runs.

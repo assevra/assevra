@@ -1,7 +1,6 @@
 # Contributing to Assevra
 
-Assevra is a personal open-source research project maintained by Veera Ravindra
-Divi. Contributions from the research and engineering community are welcome.
+Assevra is a personal open-source research project maintained by Veera Ravindra Divi and Sneha Gullapalli. Contributions from the research and engineering community are welcome.
 
 New here? [`good first issue`](https://github.com/assevra/assevra/labels/good%20first%20issue)
 collects small, self-contained tasks — each with the file to change and the test

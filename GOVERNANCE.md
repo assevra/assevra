@@ -3,11 +3,11 @@
 Assevra is a small project with a large claim: that a number in its scorecard
 means something specific. Governance here exists to protect that claim.
 
-## Current model: BDFL, stated plainly
+## Current model
 
-Assevra is maintained by **Veera Ravindra Divi**, who has final say on scope,
-methodology, and releases. This is not aspiration-as-documentation: an
-open-source project with one maintainer should say so, because a contributor
+Assevra is maintained by **Veera Ravindra Divi and Sneha Gullapalli**, who have final say
+on scope, methodology, and releases. This is not aspiration-as-documentation: an
+open-source project with two maintainers should say so, because a contributor
 deserves to know who decides and how long a review will take.
 
 The intent is to grow past this. The path is written down below rather than left
@@ -84,7 +84,7 @@ reason stronger than tidiness. Someone's pipeline parses this.
   then an issue, then code.
 
 Disagreements are settled in the open on the issue. If consensus does not
-emerge, the maintainer decides and records why.
+emerge, the maintainers decide and record why.
 
 ## Releases
 
@@ -102,11 +102,11 @@ environment, and a Zenodo archive minted so the DOI keeps resolving.
 There is no secret bar and no invitation-only list. Sustained, high-quality
 contribution — several merged pull requests, useful review of others' work, and
 demonstrated care about the methodology rather than only the code — is the whole
-criterion. If that describes you, say so on an issue; the maintainer will either
+criterion. If that describes you, say so on an issue; the maintainers will either
 agree or explain what is missing.
 
-Maintainers get commit access and a vote on methodology changes. Once there are
-three, this document is replaced by a version that no longer says "BDFL".
+Maintainers get commit access and a vote on methodology changes. As the team
+grows, this document will be updated to describe how decisions are made.
 
 ## Security
 

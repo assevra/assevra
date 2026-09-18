@@ -142,7 +142,7 @@ drift.
 
 ## Citing
 
-> Divi, Veera Ravindra. _Assevra: A Reliability Scorecard for LLM Agents_, v0.4, 2026. <https://doi.org/10.5281/zenodo.21200852>
+> Divi, Veera Ravindra; Gullapalli, Sneha. _Assevra: A Reliability Scorecard for LLM Agents_, v0.4, 2026. <https://doi.org/10.5281/zenodo.21200852>
 
 When you report a number, say it was _measured with Assevra v0.4_ — the version
 is part of the claim.

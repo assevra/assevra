@@ -2,7 +2,7 @@ name: Assevra
 description: >-
   Score your AI agent's reliability, gate the build on a regression, and publish
   a signed scorecard as release evidence.
-author: Veera Ravindra Divi
+author: Veera Ravindra Divi and Sneha Gullapalli
 branding:
   icon: shield
   color: purple
